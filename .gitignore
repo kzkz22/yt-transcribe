@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+# runtime data and downloaded models when running the service outside Docker
+data/
+models/
+yt-transcripts/
+.env

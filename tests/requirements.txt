@@ -1,0 +1,6 @@
+# Test-only dependencies. The heavy runtime stack (torch, whisperx, pyannote, yt-dlp)
+# is replaced by tests/fakes, so it does not need to be installed for the tests.
+pytest
+fastapi>=0.115
+uvicorn>=0.30
+numpy

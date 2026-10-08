@@ -51,7 +51,7 @@ def _request(server: str, path: str, payload: dict | None = None, timeout: int =
         _fail(f"service answered HTTP {exc.code}: {detail}")
     except (urllib.error.URLError, OSError) as exc:
         _fail(f"cannot reach the yt-transcribe service at {server}: {exc}. "
-              "Check that the container is running and that the URL is right.")
+              "Check that the service is running and that the URL is right.")
     return json.loads(body) if "json" in ctype else body
 
 

@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "service"))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 
-from app import cloud, formatting, pipeline, usage  # noqa: E402
+from app import cloud, formatting, local, pipeline, usage  # noqa: E402
 
 
 def test_relabel_by_first_appearance_and_inherit_missing():
@@ -89,3 +89,9 @@ def test_monthly_budget(tmp_path):
     assert usage.used_seconds(d) == 3000
     assert usage.over_budget_message(d, 1, 700)
     assert usage.over_budget_message(d, 0, 10 ** 6) is None  # 0 = no limit
+
+
+def test_worker_query_leaves_out_unset_options():
+    opts = pipeline.Options(url="u", model="large-v3-turbo", language="hu", diarize=False, num_speakers=3)
+    assert local._query(opts) == "model=large-v3-turbo&language=hu&diarize=false&num_speakers=3"
+    assert local._query(pipeline.Options(url="u")) == "model=large-v3&diarize=true"

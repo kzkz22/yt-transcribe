@@ -1,5 +1,6 @@
 # Test-only dependencies. The heavy runtime stack (torch, whisperx, pyannote, yt-dlp)
-# is replaced by tests/fakes, so it does not need to be installed for the tests.
+# is replaced by tests/fakes, so it does not need to be installed for the tests
+# (the tests run both the API and the GPU worker).
 pytest
 fastapi>=0.115
 uvicorn>=0.30

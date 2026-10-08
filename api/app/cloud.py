@@ -16,7 +16,6 @@ import json
 import logging
 import os
 import shutil
-import subprocess
 import tempfile
 import time
 import urllib.error
@@ -24,7 +23,7 @@ import urllib.request
 from typing import Callable
 
 from . import formatting, usage
-from .pipeline import Options, PipelineError, Settings, source_audio
+from .pipeline import Options, PipelineError, Settings, source_audio, to_flac
 
 log = logging.getLogger("yt-transcribe")
 
@@ -91,19 +90,6 @@ def _api(settings: Settings, method: str, path: str, body=None, headers=None, ti
                             "access; nothing was switched to local mode.") from exc
 
 
-def _to_flac(src: str, workdir: str) -> str:
-    """Mono 16 kHz FLAC: lossless for speech models and a fraction of a video's size."""
-    dst = os.path.join(workdir, "upload.flac")
-    try:
-        subprocess.run(["ffmpeg", "-nostdin", "-loglevel", "error", "-y", "-i", src, "-vn",
-                        "-ac", "1", "-ar", "16000", "-c:a", "flac", dst],
-                       check=True, capture_output=True, timeout=3600)
-    except subprocess.CalledProcessError as exc:
-        raise PipelineError("ffmpeg could not extract the audio: "
-                            + exc.stderr.decode("utf-8", "replace")[-300:]) from exc
-    return dst
-
-
 def _request_body(opts: Options, api_model: str, upload_url: str) -> dict:
     body: dict = {"audio_url": upload_url, "speech_models": [api_model],
                   "speaker_labels": bool(opts.diarize), "punctuate": True, "format_text": True}
@@ -152,7 +138,7 @@ def run(opts: Options, video: dict, settings: Settings,
         stage("download")
         source = source_audio(opts, settings, workdir)
         stage("prepare-audio")
-        flac = _to_flac(source, workdir)
+        flac = to_flac(source, workdir)
 
         stage("upload")
         with open(flac, "rb") as fh:

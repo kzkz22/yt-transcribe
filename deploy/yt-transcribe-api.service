@@ -1,0 +1,19 @@
+[Unit]
+Description=yt-transcribe API (downloads, job queue, cloud mode; local jobs go to the GPU worker)
+After=network-online.target llama-swap.service
+Wants=network-online.target
+
+[Service]
+User=yttranscribe
+StateDirectory=yt-transcribe
+Group=yttranscribe
+EnvironmentFile=/etc/yt-transcribe/api.env
+WorkingDirectory=/opt/yt-transcribe/api
+# YouTube changes often; an outdated yt-dlp is the usual reason downloads break.
+ExecStartPre=-/opt/yt-transcribe/venv/bin/pip install --quiet --upgrade "yt-dlp[default]"
+ExecStart=/opt/yt-transcribe/venv/bin/uvicorn app.server:app --host 0.0.0.0 --port 8765
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

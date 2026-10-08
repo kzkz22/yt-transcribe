@@ -1,10 +1,11 @@
-"""Test harness: runs the real service against stand-ins for the heavy or external parts.
+"""Test harness: runs the real API and the real GPU worker against stand-ins.
 
-`tests/fakes` replaces torch, whisperx and yt_dlp (put first on PYTHONPATH of the
-service process), and provides small HTTP stand-ins for llama-server (router
-mode) and AssemblyAI. The fakes record what they were asked to do in
+`tests/fakes` replaces torch, whisperx and yt_dlp (put first on PYTHONPATH of
+both processes) and provides a small HTTP stand-in for AssemblyAI. The API
+talks to the worker directly here; in production llama-swap sits between them
+and only forwards the request. The fakes record what they were asked to do in
 `<state>/calls.log`, and behave differently when flag files exist in `<state>`
-(crash_once, gpu_fail_once, load_fails, aai_error, aai_no_speakers).
+(crash_once, gpu_fail_once, aai_error, aai_no_speakers).
 
 Needs: pytest, fastapi, uvicorn, numpy, and ffmpeg/ffprobe on PATH.
 """
@@ -24,7 +25,8 @@ import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 FAKES = ROOT / "tests" / "fakes"
-SERVICE = ROOT / "service"
+API = ROOT / "api"
+WORKER = ROOT / "gpu-worker"
 CLIENT = ROOT / "hermes-skill" / "yt-transcribe" / "scripts" / "yt_transcribe.py"
 
 
@@ -64,33 +66,40 @@ def media(tmp_path_factory) -> dict[str, Path]:
 
 
 class Stack:
-    """The service plus fake llama-server and fake AssemblyAI, all as subprocesses."""
+    """The API, the GPU worker and fake AssemblyAI, all as subprocesses."""
 
     def __init__(self, tmp: Path, media: dict[str, Path], **env_overrides: str):
         self.tmp, self.state = tmp, tmp / "state"
         self.state.mkdir()
         self.procs: list[subprocess.Popen] = []
-        self.llama_port, self.aai_port, self.port = _free_port(), _free_port(), _free_port()
-        base = {**os.environ, "FAKE_DIR": str(self.state), "PYTHONUNBUFFERED": "1"}
-        for script, port in (("fake_llama.py", self.llama_port), ("fake_aai.py", self.aai_port)):
-            self._spawn([sys.executable, str(FAKES / script)], {**base, "PORT": str(port)})
-        self.env = {
+        self.aai_port, self.worker_port, self.port = _free_port(), _free_port(), _free_port()
+        base = {**os.environ, "FAKE_DIR": str(self.state), "PYTHONUNBUFFERED": "1",
+                "FAKE_SLEEP": "0"}
+        self._spawn([sys.executable, str(FAKES / "fake_aai.py")], {**base, "PORT": str(self.aai_port)})
+        worker_env = {k: v for k, v in {
             **base,
-            "PYTHONPATH": f"{FAKES}{os.pathsep}{SERVICE}",
-            "DATA_DIR": str(tmp / "data"),
+            "PYTHONPATH": f"{FAKES}{os.pathsep}{WORKER}",
+            "DATA_DIR": str(tmp / "worker-data"),
             "HF_TOKEN": "hf_fake",
             "FAKE_CUDA": "1",
-            "FAKE_SLEEP": "0",
+            **{k[len("worker__"):]: v for k, v in env_overrides.items() if k.startswith("worker__")},
+        }.items() if v is not None}
+        self._spawn([sys.executable, "-m", "uvicorn", "gpuworker.server:app", "--host", "127.0.0.1",
+                     "--port", str(self.worker_port), "--log-level", "warning"], worker_env, cwd=WORKER)
+        self.env = {k: v for k, v in {
+            **base,
+            "PYTHONPATH": f"{FAKES}{os.pathsep}{API}",
+            "DATA_DIR": str(tmp / "data"),
             "FAKE_MEDIA": str(media["audio"]),
-            "LLAMA_SERVER_URL": f"http://127.0.0.1:{self.llama_port}",
+            "WORKER_URL": f"http://127.0.0.1:{self.worker_port}",
             "ASSEMBLYAI_API_KEY": "key-ok",
             "ASSEMBLYAI_BASE_URL": f"http://127.0.0.1:{self.aai_port}",
             "CLOUD_MONTHLY_HOURS": "10",
-            **env_overrides,
-        }
-        self.env = {k: v for k, v in self.env.items() if v is not None}
+            **{k: v for k, v in env_overrides.items() if not k.startswith("worker__")},
+        }.items() if v is not None}
         self._spawn([sys.executable, "-m", "uvicorn", "app.server:app", "--host", "127.0.0.1",
-                     "--port", str(self.port), "--log-level", "warning"], self.env, cwd=SERVICE)
+                     "--port", str(self.port), "--log-level", "warning"], self.env, cwd=API)
+        _wait_http(f"http://127.0.0.1:{self.worker_port}/health")
         _wait_http(f"{self.url}/health")
 
     @property
@@ -98,7 +107,7 @@ class Stack:
         return f"http://127.0.0.1:{self.port}"
 
     def _spawn(self, cmd, env, cwd=None):
-        log = open(self.tmp / f"{Path(cmd[1] if len(cmd) > 1 else cmd[0]).name}.log", "ab")
+        log = open(self.tmp / f"{Path(cmd[3] if 'uvicorn' in cmd else cmd[1]).name}.log", "ab")
         self.procs.append(subprocess.Popen(cmd, env=env, cwd=cwd, stdout=log, stderr=log))
 
     def client(self, *args: str, out: str = "out") -> dict:
@@ -116,6 +125,11 @@ class Stack:
 
     def flag(self, name: str) -> None:
         (self.state / name).touch()
+
+    def stop_worker(self) -> None:
+        """Simulates a GPU server that is switched off."""
+        self.procs[1].terminate()
+        self.procs[1].wait(timeout=5)
 
     def stop(self) -> None:
         for p in reversed(self.procs):
@@ -140,6 +154,8 @@ def make_stack(tmp_path, media):
     made: list[Stack] = []
 
     def _make(**env) -> Stack:
+        """Keyword arguments are environment variables of the API; prefix one with
+        `worker__` to set it on the GPU worker instead (worker__HF_TOKEN="")."""
         s = Stack(tmp_path / f"stack{len(made)}", media, **env) if made else Stack(tmp_path, media, **env)
         made.append(s)
         return s

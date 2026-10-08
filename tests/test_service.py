@@ -3,20 +3,24 @@ from __future__ import annotations
 
 import json
 import time
+import urllib.error
+import urllib.request
 
 
-def _llama_and_model_calls(stack) -> list[str]:
-    return [c for c in stack.calls() if c.startswith(("LLAMA", "transcribe", "diarize", "AAI"))]
+def _model_calls(stack) -> list[str]:
+    return [c for c in stack.calls() if c.startswith(("load_model", "transcribe", "diar", "AAI"))]
 
 
-def test_local_gpu_borrows_and_returns_the_llm(stack):
+def test_local_job_runs_on_the_gpu_worker(stack):
     out = stack.client("run", "https://youtu.be/v1", "--language", "hu", "--speakers", "2")
     assert out["status"] == "done" and out["mode"] == "local" and out["device"] == "cuda"
     assert [s["label"] for s in out["speakers"]] == ["Szereplő 1", "Szereplő 2"]
-    calls = _llama_and_model_calls(stack)
-    assert calls[0] == "LLAMA /models/unload qwen-code"
-    assert "LLAMA /models/load qwen-code" in calls and calls[-1] == "LLAMA loaded qwen-code"
-    assert any(c.startswith("transcribe cuda") for c in calls)
+    calls = _model_calls(stack)
+    assert calls[0] == "load_model large-v3 cuda float16"
+    assert "transcribe cuda 8" in calls and "diarize cuda 2" in calls
+    assert not any(c.startswith("AAI") for c in calls), "local mode must not touch the cloud"
+    srt = open(out["files"]["srt"], encoding="utf-8").read()
+    assert "[Szereplő 1] Jó napot." in srt and "[Szereplő 2] Köszönöm." in srt
 
 
 def test_local_model_choice_and_side_by_side_results(stack):
@@ -27,17 +31,39 @@ def test_local_model_choice_and_side_by_side_results(stack):
     assert any(c.startswith("load_model large-v3-turbo") for c in stack.calls())
 
 
-def test_crash_is_isolated_and_retry_resumes_from_checkpoint(stack):
+def test_worker_crash_is_isolated_and_retry_resumes_from_checkpoint(stack):
     stack.flag("crash_once")
     first = stack.client("run", "https://youtu.be/v3")
     assert first["status"] == "error" and "killed" in first["error"]
     assert stack.client("health")["ok"]
-    # the LLM must be loaded again even though the job died
-    assert "LLAMA /models/load qwen-code" in stack.calls()
     stack.clear_calls()
     second = stack.client("run", "https://youtu.be/v3")
     assert second["status"] == "done"
     assert not any(c.startswith("transcribe") for c in stack.calls()), "Whisper should not rerun"
+    assert any(c.startswith("diarize") for c in stack.calls())
+
+
+def test_gpu_failure_finishes_on_cpu_with_a_warning(stack):
+    stack.flag("gpu_fail_once")
+    out = stack.client("run", "https://youtu.be/v4", "--language", "hu")
+    assert out["status"] == "done" and out["device"] == "cpu"
+    assert any("finished on CPU" in w for w in out["warnings"])
+
+
+def test_gpu_server_off_is_an_error_without_cloud_fallback(stack):
+    stack.stop_worker()
+    assert stack.client("health")["ok"], "/health must not depend on (or wake) the worker"
+    out = stack.client("run", "https://youtu.be/v5", "--language", "hu")
+    assert out["status"] == "error" and "GPU worker could not be reached" in out["error"]
+    assert "nothing was switched to cloud mode" in out["error"]
+    assert not any(c.startswith("AAI") for c in stack.calls())
+
+
+def test_worker_refusal_is_reported(make_stack):
+    s = make_stack(worker__HF_TOKEN="")
+    out = s.client("run", "https://youtu.be/v6")
+    assert out["status"] == "error" and "Hugging Face token" in out["error"]
+    assert s.client("run", "https://youtu.be/v6", "--no-diarize")["status"] == "done"
 
 
 def test_cloud_hungarian_flow(stack):
@@ -46,7 +72,8 @@ def test_cloud_hungarian_flow(stack):
     assert out["cloud"]["deleted_at_provider"] is True
     assert out["cloud"]["estimated_cost_usd"] == round(0.17 * 754 / 3600, 4)
     calls = stack.calls()
-    assert not any(c.startswith("LLAMA") for c in calls), "cloud mode must not touch the LLM"
+    assert not any(c.startswith(("load_model", "transcribe")) for c in calls), \
+        "cloud mode must not use the GPU worker"
     upload = next(c for c in calls if c.startswith("AAI upload"))
     assert "magic=fLaC" in upload
     body = json.loads(next(c for c in calls if c.startswith("AAI transcript"))[len("AAI transcript "):])
@@ -78,7 +105,7 @@ def test_cloud_failure_does_not_fall_back_to_local(stack):
     stack.flag("aai_error")
     out = stack.client("run", "https://youtu.be/c4", "--mode", "cloud", "--language", "hu")
     assert out["status"] == "error" and "could not transcribe" in out["error"]
-    assert not any(c.startswith(("load_model", "LLAMA")) for c in stack.calls())
+    assert not any(c.startswith(("load_model", "transcribe")) for c in stack.calls())
 
 
 def test_cloud_without_speaker_labels_warns(stack):
@@ -113,3 +140,34 @@ def test_cloud_not_configured(make_stack):
     out = s.client("run", "https://youtu.be/x", "--mode", "cloud")
     assert out["status"] == "error" and "ASSEMBLYAI_API_KEY is missing" in out["error"]
     assert s.client("health")["cloud"]["available"] is False
+
+
+def _worker_busy(stack) -> bool:
+    url = f"http://127.0.0.1:{stack.worker_port}/health"
+    return json.loads(urllib.request.urlopen(url, timeout=5).read())["busy"]
+
+
+def test_job_deadline_stops_the_worker_and_frees_the_gpu(make_stack, media):
+    s = make_stack(WORKER_TIMEOUT_MIN="0.1")  # 6 s, or 4x the 5 s audio = 20 s
+    s.flag("slow_once")
+    started = time.time()
+    out = s.client("run", str(media["video"]), "--language", "hu")
+    assert out["status"] == "error" and "did not finish within" in out["error"]
+    assert time.time() - started < 35
+    deadline = time.time() + 10
+    while _worker_busy(s) and time.time() < deadline:
+        time.sleep(0.5)
+    assert not _worker_busy(s), "the worker must release the GPU when the caller goes away"
+    assert s.client("run", str(media["video"]), "--language", "hu")["status"] == "done"
+
+
+def test_worker_reads_a_large_body_before_refusing_it(make_stack):
+    s = make_stack(worker__HF_TOKEN="")
+    req = urllib.request.Request(f"http://127.0.0.1:{s.worker_port}/transcribe?model=large-v3",
+                                 data=b"\0" * (30 * 1024 * 1024), method="POST",
+                                 headers={"content-type": "audio/flac"})
+    try:
+        urllib.request.urlopen(req, timeout=60)
+        raise AssertionError("expected a refusal")
+    except urllib.error.HTTPError as exc:
+        assert exc.code == 422 and "Hugging Face token" in exc.read().decode()

@@ -8,25 +8,20 @@ ENV PYTHONUNBUFFERED=1 \
     NLTK_DATA=/models/nltk \
     DATA_DIR=/data
 
+# whisperx reads audio through ffmpeg
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg ca-certificates \
  && rm -rf /var/lib/apt/lists/*
-
-# yt-dlp needs a JavaScript runtime for YouTube; deno is the one it uses by default.
-COPY --from=denoland/deno:bin /deno /usr/local/bin/deno
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 
-# Lets faster-whisper (CTranslate2) find the cuDNN/cuBLAS libraries that ship with torch
-# when the container runs with DEVICE=cuda. Harmless on CPU.
+# Lets faster-whisper (CTranslate2) find the cuDNN/cuBLAS libraries that ship with torch.
 ENV LD_LIBRARY_PATH=/usr/local/lib/python3.12/site-packages/nvidia/cudnn/lib:/usr/local/lib/python3.12/site-packages/nvidia/cublas/lib
 
-COPY app ./app
-COPY entrypoint.sh .
+COPY gpuworker ./gpuworker
 
 VOLUME ["/models", "/data"]
-EXPOSE 8765
-# Run through sh so it works even if the executable bit was lost while copying the files.
-ENTRYPOINT ["sh", "/app/entrypoint.sh"]
+EXPOSE 8766
+CMD ["sh", "-c", "exec uvicorn gpuworker.server:app --host 0.0.0.0 --port ${PORT:-8766}"]

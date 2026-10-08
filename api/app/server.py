@@ -8,10 +8,12 @@ GET  /jobs/{id}/result     ?format=txt|srt|json                 -> transcript
 GET  /health
 
 Each job says how it should be transcribed: mode (local | cloud), model and
-language; anything left out takes the container's default. One job runs at a
-time, each in its own child process (see runner.py). Finished results are
-cached on disk under DATA_DIR per video and option set, so asking again
-returns immediately, and the same video can be kept in both modes.
+language; anything left out takes the service's default. Local jobs are sent
+to the GPU worker through llama-swap (local.py), cloud jobs to AssemblyAI
+(cloud.py). One job runs at a time, each in its own child process (see
+runner.py). Finished results are cached on disk under DATA_DIR per video and
+option set, so asking again returns immediately, and the same video can be
+kept in both modes.
 """
 from __future__ import annotations
 
@@ -34,23 +36,22 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field, model_validator
 
-from . import cloud, gpu, pipeline, usage
+from . import cloud, pipeline, usage
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("yt-transcribe")
 
-DATA_DIR = Path(os.environ.get("DATA_DIR", "/data"))
+SETTINGS = pipeline.Settings()
+DATA_DIR = Path(SETTINGS.data_dir)
 CACHE_DIR = DATA_DIR / "transcripts"
 JOBS_DIR = DATA_DIR / "jobs"
 UPLOADS_DIR = DATA_DIR / "uploads"
 MAX_UPLOAD_BYTES = int(float(os.environ.get("MAX_UPLOAD_GB", "8")) * 1024 ** 3)
 UPLOAD_TTL_S = int(float(os.environ.get("UPLOAD_TTL_DAYS", "7")) * 86400)
-SETTINGS = pipeline.Settings()
 
 _jobs: dict[str, dict] = {}
 _lock = threading.Lock()
 _queue: "queue.Queue[str]" = queue.Queue()
-_to_reload: list[str] = []  # LLM models unloaded for a job and not loaded back yet
 
 
 class JobRequest(BaseModel):
@@ -95,7 +96,7 @@ def _resolve_model(mode: str, model: str | None, language: str | None) -> str:
     model = (model or "").strip().lower() or None
     if mode == "cloud":
         if not SETTINGS.assemblyai_api_key:
-            raise ValueError("cloud mode is not set up: ASSEMBLYAI_API_KEY is missing on the container")
+            raise ValueError("cloud mode is not set up: ASSEMBLYAI_API_KEY is missing on the service")
         try:
             return cloud.resolve_model(model or SETTINGS.cloud_default_model, language)
         except pipeline.PipelineError as exc:
@@ -109,8 +110,7 @@ def _resolve_model(mode: str, model: str | None, language: str | None) -> str:
 
 def _cache_path(video_id: str, req: JobRequest) -> Path:
     key = json.dumps([req.mode, req.model, req.language, req.diarize, req.num_speakers,
-                      req.min_speakers, req.max_speakers,
-                      SETTINGS.diarize_model if req.mode == "local" else None], sort_keys=True)
+                      req.min_speakers, req.max_speakers], sort_keys=True)
     digest = hashlib.sha1(key.encode()).hexdigest()[:10]
     safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in video_id)
     return CACHE_DIR / safe_id / digest
@@ -148,27 +148,10 @@ def _fail_message(job_dir: Path, returncode: int) -> str:
     except OSError:
         pass
     if returncode < 0 or returncode == 137:
-        return ("The worker process was killed by the system (signal "
-                f"{abs(returncode) if returncode < 0 else 9}), most likely because the machine ran "
-                "out of memory. Finished steps are saved; submitting again resumes from them.")
-    return f"The worker process exited unexpectedly (code {returncode}); see the container log."
-
-
-def _reload_llm(job: dict, job_dir: Path) -> list[str]:
-    """Load the models this job unloaded. With more jobs waiting, postpone it to the last one."""
-    try:
-        names = json.loads((job_dir / "unloaded.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        names = []
-    _to_reload.extend(n for n in names if n not in _to_reload)
-    if not _to_reload or not _queue.empty():
-        return []
-    job.update(stage="reload-llm")
-    names, _to_reload[:] = list(_to_reload), []
-    problems = gpu.load_llm(SETTINGS, names)
-    for problem in problems:
-        log.warning(problem)
-    return problems
+        return ("The job process was killed by the system (signal "
+                f"{abs(returncode) if returncode < 0 else 9}), most likely because this machine ran "
+                "out of memory. Submitting again resumes from the finished steps.")
+    return f"The job process exited unexpectedly (code {returncode}); see the service log."
 
 
 def _run_job(job: dict) -> None:
@@ -187,15 +170,10 @@ def _run_job(job: dict) -> None:
             except (OSError, ValueError):
                 pass
             time.sleep(1)
-        # The child has exited, so its VRAM is free: give the GPU back to the LLM before
-        # reporting the job as finished, so the caller's next LLM request finds it loaded.
-        reload_problems = _reload_llm(job, job_dir)
         result_file = Path(job["path"]) / "result.json"
         if proc.returncode == 0 and result_file.exists():
             result = json.loads(result_file.read_text(encoding="utf-8"))
-            summary = _summary(result)
-            summary["warnings"] = summary["warnings"] + reload_problems
-            job.update(status="done", stage="done", summary=summary)
+            job.update(status="done", stage="done", summary=_summary(result))
             log.info("job %s done: %s", job["job_id"], job["video"].get("title"))
         else:
             job.update(status="error", error=_fail_message(job_dir, proc.returncode))
@@ -204,7 +182,7 @@ def _run_job(job: dict) -> None:
         shutil.rmtree(job_dir, ignore_errors=True)
 
 
-def _worker() -> None:
+def _job_loop() -> None:
     while True:
         job_id = _queue.get()
         job = _jobs[job_id]
@@ -224,15 +202,14 @@ async def _lifespan(_app: FastAPI):
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
     shutil.rmtree(JOBS_DIR, ignore_errors=True)  # leftovers of jobs cut short by a restart
     _expire_uploads()
-    threading.Thread(target=_worker, daemon=True, name="worker").start()
-    log.info("ready: default-mode=%s local-model=%s device=%s diarization=%s llm-unload=%s cloud=%s",
-             SETTINGS.default_mode, SETTINGS.whisper_model, SETTINGS.device,
-             "on" if SETTINGS.hf_token else "OFF (no HF_TOKEN)", SETTINGS.llama_server_url or "off",
+    threading.Thread(target=_job_loop, daemon=True, name="jobs").start()
+    log.info("ready: default-mode=%s local-model=%s worker=%s cloud=%s",
+             SETTINGS.default_mode, SETTINGS.whisper_model, SETTINGS.worker_url,
              "on" if SETTINGS.assemblyai_api_key else "off (no ASSEMBLYAI_API_KEY)")
     yield
 
 
-app = FastAPI(title="yt-transcribe", version="1.3.0", lifespan=_lifespan)
+app = FastAPI(title="yt-transcribe", version="2.0.0", lifespan=_lifespan)
 
 
 def _expire_uploads() -> None:
@@ -251,10 +228,10 @@ def health() -> dict:
     return {
         "ok": True,
         "default_mode": SETTINGS.default_mode,
+        # The worker is not contacted here: through llama-swap that would take the GPU.
         "local": {"default_model": SETTINGS.whisper_model,
                   "models": sorted({SETTINGS.whisper_model, *SETTINGS.local_models}),
-                  "device": SETTINGS.device, "diarization_available": bool(SETTINGS.hf_token),
-                  "llm_unload": bool(SETTINGS.llama_server_url)},
+                  "worker_url": SETTINGS.worker_url},
         "cloud": {"available": bool(SETTINGS.assemblyai_api_key), "provider": "assemblyai",
                   "default_model": SETTINGS.cloud_default_model, "models": cloud.choices(),
                   "hours_used_this_month": round(usage.used_seconds(str(DATA_DIR)) / 3600, 2),

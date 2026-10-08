@@ -5,6 +5,7 @@ class _M:
     def __init__(s, dev): s.dev = dev
     def transcribe(s, audio, batch_size=None, language=None):
         _fk.log("transcribe", s.dev, batch_size); time.sleep(float(os.environ.get("FAKE_SLEEP", "0")))
+        if _fk.once("slow_once"): time.sleep(40)
         return {"language": language or "hu", "segments": [{"start": 0, "end": 30, "text": "raw"}]}
 def load_model(arch, device, compute_type=None, language=None, threads=4):
     _fk.log("load_model", arch, device, compute_type); return _M(device)

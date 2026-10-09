@@ -37,4 +37,4 @@ models:
     unlisted: true   # not an LLM: keep it out of /v1/models
     ttl: 600         # stop the worker after 10 idle minutes
 
-  # Strata comes here later, in the same shape.
+  # More GPU containers go here in the same shape (docs/frissites.md, "Új GPU-s konténer bekötése").

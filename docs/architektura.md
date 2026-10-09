@@ -31,7 +31,6 @@ Kapcsolódó leírások: [telepítés](telepites.md) · [frissítés](frissites.
 | YouTube és más oldalak | Internet | – | A videók forrása; a yt-dlp innen tölti le a hangot. | Külső |
 | Unraid API | Unraid | 80 (`/graphql`) | Konténerek indítása és leállítása, csak Docker-jogú API-kulccsal. | Kész |
 | llama-server | Unraid, `llama.cpp` konténer | 8001 | Hivatalos llama.cpp image router módban. A 6 preset a `models.ini`-ben van, egyszerre egy töltődik be (`--models-max 1`). | Kész |
-| Strata | Unraid, konténer | – | Qwen3.8-Flash-Next. | Még nincs bekötve |
 | yt-transcribe GPU-worker | Unraid, `yt-transcribe-gpu` konténer | 8766 | Átírás (faster-whisper), igazítás (wav2vec2), beszélők (pyannote). Minden feladat külön folyamatban fut, a végén a VRAM felszabadul. | Kész |
 | RTX 3090, NVMe | Unraid | – | A GPU-t egyszerre egy konténer használja. A modellfájlok a helyi NVMe-n vannak, nem a hálózaton. | Meglévő |
 
@@ -140,8 +139,23 @@ A válaszidőt a modellváltás határozza meg (konténerindítás és betölté
   - A Hermes egy terminálhívása legfeljebb 600 másodpercet várhat.
 - **Tartalékváltás ára.** Az `auto` átváltáskor a teljes beszélgetést a felhőbe küldi: ez pénzbe kerül, és az adat kikerül a hálózatból.
 
+## Kipróbált, de kimaradt: Strata
+
+A Strata (Qwen3.8-Flash-Next) telepítve volt az Unraidon, de nem került a llama-swap alá:
+- **Lassú indulás.** Indításkor kb. 3,5–4 percig tölt. A llama-swap minden modellváltáskor újraindítja a konténereket, így minden váltás ennyi várakozást jelentene, az átírás utáni visszaváltás is.
+- **Nem jobb a meglévőknél.** A saját méréseink szerint (tool-eval-bench):
+
+  | Modell | Eredmény | Futási idő |
+  | --- | --- | --- |
+  | Qwen3.8-27B | 96,1% | 16 perc |
+  | Strata | 90,6% | 12 perc |
+  | Qwen3.6-35B-A3B gondolkodás nélkül | 89,8% | 2,4 perc |
+
+  A Qwen3.6-35B-A3B tehát ugyanazt az eredményt adja, és néhány másodperc alatt betölt. Sok rövid kérésnél a Strata lassabb is volt, mint a llama.cpp.
+
+Ha később mégis kellene, ugyanúgy köthető be, mint bármely más GPU-s konténer; a lassú indulás beállításai a [frissítési leírásban](frissites.md#új-gpu-s-konténer-bekötése) vannak.
+
 ## Ami még hátravan
 
-- A Strata bekötése a llama-swap alá. Ehhez kell egy Unraid-konténer, fix porttal és automatikus indítás nélkül, utána ugyanúgy, mint a llama-server.
 - Az OpenCode és a VS Code átállítása a LiteLLM-re. Az OpenCode beállítófájlja kész: `deploy/clients/opencode.json`.
 - A felhős átírás éles próbája AssemblyAI-kulccsal, magyar és angol videóval.

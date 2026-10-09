@@ -33,7 +33,7 @@ and the matching `deploy/` file in the same change. Keep the diagram in sync (ed
 
 llama-swap (on the same Proxmox LXC) owns the GPU queue. It starts/stops Unraid containers
 through the Unraid GraphQL API (`deploy/llama-swap/unraid-container.sh`), one at a time:
-the llama.cpp router container, the GPU worker, later Strata. A local job is ONE streamed
+the llama.cpp router container and the GPU worker. A local job is ONE streamed
 HTTP request `POST WORKER_URL/transcribe` (WORKER_URL = `http://127.0.0.1:8080/upstream/yt-transcribe-gpu`).
 While it is open, llama-swap keeps the GPU for the worker and queues LLM requests; the next
 LLM request stops the worker and restarts llama-server. Verified with the real llama-swap
@@ -75,6 +75,8 @@ Consequences — keep them:
   Unraid, started on demand by llama-swap via the Unraid API (no Docker socket).
 - llama.cpp runs as ONE router-mode container with the owner's `models.ini` (6 presets); llama-swap
   has one entry for it with every preset name as an alias (the request's model name passes through).
+- Strata (Qwen3.8-Flash-Next) was tried and dropped: ~4 min load per start (every swap restarts it)
+  and it scored no better than Qwen3.6-35B-A3B in the owner's benchmark. Not in the diagram or configs.
 - LiteLLM stays because of error-based fallback (`auto` → cloud when Unraid is off); llama-swap's
   selectors choose before sending and never retry (checked in v262 source). Without `auto` it could go.
 
@@ -95,7 +97,7 @@ Consequences — keep them:
 - Verified on the real servers (2026-10-09, owner): llama-swap + Unraid API script, LiteLLM incl.
   cloud fallback, Hermes through LiteLLM, the split API/worker in local mode.
 - Not yet verified for real: the whole cloud transcription mode (real AssemblyAI not yet called),
-  uploads, budget; Strata (not connected yet); OpenCode/VS Code through LiteLLM. Treat behaviour of the real
+  uploads, budget; OpenCode/VS Code through LiteLLM. Treat behaviour of the real
   AssemblyAI API (Hungarian accuracy, diarization for Hungarian) as unknown until tested.
 
 ## Tests

@@ -72,6 +72,29 @@ Végül a repóban is frissítsd a `deploy/` fájlokat, hogy a következő telep
 
 **Ellenőrzés:** `curl localhost:4000/v1/models -H "Authorization: Bearer $K"` kilistázza az új nevet, és egy kérés rá választ ad.
 
+## Új GPU-s konténer bekötése
+
+Bármilyen új program, ami a GPU-t használja (másik LLM-motor, képgenerátor), ugyanúgy kerül a llama-swap alá, mint a llama-server és a GPU-worker. Ha kimarad, a llama-swap nem tud róla, és két program foglalhatja egyszerre a VRAM-ot.
+
+1. **Unraid:** a konténer kapjon fix portot, és az automatikus indítása legyen kikapcsolva. Legyen egy címe, ami csak akkor ad 200-as választ, ha a program már kész kéréseket fogadni (llama.cpp-nél ez a `/health`).
+2. **`/etc/llama-swap/unraid.env`:** a konténer nevét vedd fel a `GPU_CONTAINERS` listába. Az indítóscript így leállítja, mielőtt mást indít.
+3. **`/etc/llama-swap/config.yaml`:** új bejegyzés a `models:` alá, a meglévők mintájára:
+   ```yaml
+   uj-motor:
+     cmd: /opt/llama-swap/unraid-container.sh run KONTÉNERNÉV
+     cmdStop: /opt/llama-swap/unraid-container.sh stop KONTÉNERNÉV ${PID}
+     proxy: http://192.168.1.20:PORT
+     checkEndpoint: /health
+     aliases: [a kliensek által használt modellnevek]
+   ```
+4. **LiteLLM:** a modellneveket vedd fel a `model_list`-be (lásd az előző pontot), és indítsd újra.
+
+**Lassan induló programnál** (percekig tölt) ezekre figyelj:
+- A llama-swap `healthCheckTimeout` értéke (a `config.yaml` elején, most 180 másodperc) közös minden bejegyzésre. Legyen nagyobb, mint a leglassabb indulás, különben a llama-swap hibának veszi.
+- A LiteLLM a helyi modelleknél 600 másodpercig vár az első tokenre (`stream_timeout`). Ebbe a modellváltás teljes ideje is beleszámít, a futó kérések kivárásával együtt.
+- A kliensnek is ki kell várnia: egy 4 perces indulásnál sok kliens alapértelmezett időkorlátja lejár.
+- Minden modellváltás újra kifizeti az indulási időt, az átírás utáni visszaváltás is. A Strata ezért maradt ki: 3,5–4 percig indult (lásd az [architektúra-leírást](architektura.md#kipróbált-de-kimaradt-strata)).
+
 ## llama-swap (ai-router LXC)
 
 1. Töltsd le az új verziót egy ideiglenes helyre, és ellenőrizd vele a mostani konfigurációt:

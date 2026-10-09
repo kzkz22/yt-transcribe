@@ -1,0 +1,10 @@
+{
+  "wireMagic": "pb3",
+  "pens": [ {} ], "wsWinStyles": [ {} ], "wpWinPositions": [ {} ],
+  "events": [
+    {"tStartMs": 160, "dDurationMs": 7760, "segs": [ {"utf8": "Look at these two identical PETG prints. \nSame 3D printer, same nozzle temperature,"} ]},
+    {"tStartMs": 7920, "dDurationMs": 6480, "segs": [ {"utf8": "same G-code, and exactly the same spool of \nfilament. One is rock solid. The other snapped"} ]},
+    {"tStartMs": 14400, "dDurationMs": 2000, "segs": [ {"utf8": "[Music]"} ]},
+    {"tStartMs": 16400, "dDurationMs": 6160, "segs": [ {"utf8": "right in my hands. The only difference? \nThe filament dryer they were fed from."} ]}
+  ]
+}

@@ -170,7 +170,8 @@ A gyorsítótárban lévő átiratok (`/var/lib/yt-transcribe/transcripts`) fris
 
 ### yt-dlp és deno
 
-- A **yt-dlp** a szolgáltatás minden indításakor frissül. Ha egy YouTube-videó letöltése hibát ad, először ezt próbáld: `systemctl restart yt-transcribe-api`.
+- A **yt-dlp** a szolgáltatás minden indításakor frissül, a `curl-cffi` kiegészítővel együtt (ezzel a yt-dlp böngészőnek látszik, és ritkábban kap 429-es tiltást). Ha egy YouTube-videó vagy felirat letöltése hibát ad, először ezt próbáld: `systemctl restart yt-transcribe-api`.
+- **Ha a szolgáltatásfájl még a régi** (`yt-dlp[default]` szerepel benne `curl-cffi` nélkül), másold át az újat a repóból (`deploy/yt-transcribe/yt-transcribe-api.service`), majd `systemctl daemon-reload`.
 - A **deno**-t ritkán kell frissíteni, csak ha a yt-dlp hibaüzenete erre utal: `deno upgrade`.
 
 ## GPU-worker (Unraid)

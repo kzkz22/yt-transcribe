@@ -4,9 +4,10 @@ Videóból vagy hangfájlból felirat beszélőcímkékkel (Szereplő 1, Szerepl
 
 Három része van:
 
-- `api/` – a szolgáltatás HTTP API-ja (8765-ös port). A mindig futó Proxmox LXC-ben fut, GPU nélkül. Letölti a hangot (yt-dlp), 16 kHz-es mono FLAC-ká alakítja (ffmpeg), kezeli a feladatsort, a feltöltött fájlokat és a kimeneti fájlokat. Kétféleképpen ír át:
+- `api/` – a szolgáltatás HTTP API-ja (8765-ös port). A mindig futó Proxmox LXC-ben fut, GPU nélkül. Letölti a hangot (yt-dlp), 16 kHz-es mono FLAC-ká alakítja (ffmpeg), kezeli a feladatsort, a feltöltött fájlokat és a kimeneti fájlokat. Háromféleképpen ad átiratot:
   - **helyi mód:** a hangot átküldi a GPU-workernek az Unraidra;
-  - **felhős mód:** az AssemblyAI szolgáltatásával; ehhez az Unraidnak nem kell futnia.
+  - **felhős mód:** az AssemblyAI szolgáltatásával; ehhez az Unraidnak nem kell futnia;
+  - **felirat mód (`captions`):** a YouTube saját felirata, GPU és költség nélkül, néhány másodperc alatt, de beszélők nélkül.
 - `gpu-worker/` – Docker-konténer az Unraidon. Whisper (WhisperX-en keresztül), szóra pontos időzítés és beszélőfelismerés (pyannote) az RTX 3090-en. A llama-swap indítja és állítja le, ahogy a GPU-t kiosztja.
 - `hermes-skill/yt-transcribe/` – Hermes skill. Meghívja az API-t, megvárja az eredményt, beolvassa az átiratot, és az LLM-mel összefoglalja.
 
@@ -41,6 +42,21 @@ A telepítéshez szükséges fájlok a `deploy/` mappában vannak:
 | `deploy/yt-transcribe/` | az API systemd-szolgáltatása és beállításainak mintája |
 | `deploy/clients/` | OpenCode-beállítás |
 
+## Felirat mód (YouTube-felirat)
+
+A `--mode captions` nem ír át semmit: a YouTube saját feliratát tölti le a yt-dlp-vel, és ugyanolyan TXT, SRT és JSON fájlokat készít belőle, mint a másik két mód. A GPU-hoz és az Unraidhoz nem nyúl, és ingyenes.
+
+- **Melyik feliratot:** mindig csak egyet, a videó nyelvén. Ha a feltöltő adott saját feliratot, azt; ha nem, a YouTube automatikus feliratát (`<nyelv>-orig`). Gépi fordítást nem használ; a fordítást a webes felület készíti.
+- **Minőség:** a saját felirat általában pontos. Az automatikus felirat felismerési hibákat tartalmazhat, ilyenkor az eredményben figyelmeztetés jelzi. Ha nem elég jó, ugyanaz a videó `--mode local` vagy `--mode cloud` kapcsolóval is kérhető; a két eredmény megmarad egymás mellett.
+- **Beszélők nincsenek,** és a `--model` kapcsolónak itt nincs szerepe.
+- **Ha nincs felirat** a videó nyelvén, a munka hibát ad, és nem vált át magától más módra.
+- **Csak URL-lel működik,** feltöltött fájllal nem.
+- **Tiltás:** a YouTube sok gyors kérés után 429-es hibát ad. A `curl-cffi` csomag (benne van a `requirements.txt`-ben) csökkenti ennek esélyét; ha mégis előfordul, később próbáld újra.
+
+## Kész eredmények listázása
+
+A `GET /results?since=<unix-idő>&after=<result_id>` kilistázza az adott pont után elkészült eredményeket, bárki kérte őket (Hermes, webes felület), időrendben. A következő lekérdezéshez az utolsó találat `finished_at` és `result_id` értékét kell visszaadni; ha a válaszban `"more": true`, van még. A `GET /results/<result_id>?format=json|txt|srt` egy eredményt ad vissza. Ezt használja a webes felület, hogy a Hermesen át készült átiratok is bekerüljenek a könyvtárába. Egy `--force`-szal újraszámolt eredmény újra megjelenik a listában, ugyanazzal a `result_id`-vel.
+
 ## Felhős mód (AssemblyAI)
 
 Felhős módban az API letölti a hangot, kis méretű FLAC-fájllá alakítja, feltölti az AssemblyAI-hoz, és onnan kapja vissza az átiratot a beszélőcímkékkel. A GPU-hoz nem nyúl, így kikapcsolt Unraid mellett is működik.
@@ -62,7 +78,7 @@ Bekapcsolásához regisztrálj az assemblyai.com-on, és írd be a kulcsot az `a
 | `DATA_DIR` | `/var/lib/yt-transcribe` | Átiratok, feltöltött fájlok, felhős keret |
 | `WORKER_URL` | `http://127.0.0.1:8080/upstream/yt-transcribe-gpu` | A GPU-worker a llama-swapon keresztül |
 | `WORKER_TIMEOUT_MIN` | `30` | Egy helyi munka leghosszabb ideje, a GPU-ra várással együtt; hosszú hangnál a hang hosszának négyszereséig nő. Ha lejár, a munka leáll, és a worker elengedi a GPU-t |
-| `DEFAULT_MODE` | `local` | Az alapértelmezett mód: `local` vagy `cloud` |
+| `DEFAULT_MODE` | `local` | Az alapértelmezett mód: `local`, `cloud` vagy `captions` |
 | `WHISPER_MODEL` | `large-v3` | A helyi mód alapmodellje |
 | `LOCAL_MODELS` | `large-v3,large-v3-turbo` | A kérésben választható helyi modellek |
 | `ASSEMBLYAI_API_KEY` | – | A felhős mód kulcsa; nélküle a felhős mód nem érhető el |
@@ -100,7 +116,7 @@ A `run` kapcsolói:
 
 | Kapcsoló | Értékek | Alapérték |
 | --- | --- | --- |
-| `--mode` | `local`, `cloud` | az API `DEFAULT_MODE` értéke |
+| `--mode` | `local`, `cloud`, `captions` | az API `DEFAULT_MODE` értéke |
 | `--model` | helyi: `large-v3`, `large-v3-turbo`; felhős: `auto`, `universal-2`, `universal-3.5-pro` | módonként az alapmodell |
 | `--language` | `hu`, `en`, … | automatikus felismerés |
 | `--speakers` | a beszélők pontos száma | automatikus |

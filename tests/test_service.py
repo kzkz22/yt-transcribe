@@ -171,3 +171,80 @@ def test_worker_reads_a_large_body_before_refusing_it(make_stack):
         raise AssertionError("expected a refusal")
     except urllib.error.HTTPError as exc:
         assert exc.code == 422 and "Hugging Face token" in exc.read().decode()
+
+
+def _api_get(stack, path: str):
+    with urllib.request.urlopen(stack.url + path, timeout=10) as resp:
+        body = resp.read().decode("utf-8")
+        return json.loads(body) if "json" in resp.headers.get("Content-Type", "") else body
+
+
+def test_captions_mode_uses_the_uploaders_own_track(stack):
+    out = stack.client("run", "https://youtu.be/capman1", "--mode", "captions")
+    assert out["status"] == "done" and out["mode"] == "captions" and out["model"] == "youtube-manual"
+    assert out["language"] == "en" and out["diarized"] is False and out["speakers"] == []
+    assert out["captions"] == {"kind": "manual", "track": "en-US"}
+    calls = stack.calls()
+    assert [c for c in calls if c.startswith("captions fetch")] == ["captions fetch captions_manual_en"], \
+        "exactly one track, the own one in the video's language"
+    assert not any(c.startswith(("load_model", "transcribe", "AAI")) for c in calls)
+    srt = open(out["files"]["srt"], encoding="utf-8").read()
+    assert "Look at these two identical PETG prints." in srt and "[Music]" not in srt
+    assert "The filament dryer they were fed from." in srt
+
+
+def test_captions_mode_builds_sentences_from_automatic_words(stack):
+    out = stack.client("run", "https://youtu.be/capauto1", "--mode", "captions")
+    assert out["status"] == "done" and out["model"] == "youtube-auto" and out["language"] == "hu"
+    assert out["captions"] == {"kind": "auto", "track": "hu-orig"}
+    assert any("automatic captions" in w for w in out["warnings"])
+    srt = open(out["files"]["srt"], encoding="utf-8").read()
+    assert "Sziasztok, Laci vagyok, a T2-t nézitek, és a mai videóban hoztam nektek tíz kütyüt." in srt
+    assert "00:00:09,520 --> " in srt and "Ez a kedvencem." in srt
+
+
+def test_captions_mode_without_a_track_fails_without_fallback(stack):
+    out = stack.client("run", "https://youtu.be/nocap1", "--mode", "captions")
+    assert out["status"] == "error" and "no captions in its language ('de')" in out["error"]
+    assert "mode=local" in out["error"]
+    assert not any(c.startswith(("load_model", "transcribe", "AAI", "captions fetch")) for c in stack.calls())
+
+
+def test_captions_mode_reports_youtube_refusals(stack):
+    stack.flag("captions_429")
+    out = stack.client("run", "https://youtu.be/capman2", "--mode", "captions")
+    assert out["status"] == "error" and "HTTP Error 429" in out["error"]
+
+
+def test_captions_requests_ignore_speaker_options(stack):
+    a = stack.client("run", "https://youtu.be/capman4", "--mode", "captions")
+    b = stack.client("run", "https://youtu.be/capman4", "--mode", "captions", "--speakers", "3")
+    assert a["status"] == b["status"] == "done" and b["cached"] is True
+
+
+def test_captions_mode_needs_a_url(stack, media):
+    out = stack.client("run", str(media["video"]), "--mode", "captions")
+    assert out["status"] == "error" and "captions mode needs a video URL" in out["error"]
+
+
+def test_finished_results_can_be_listed_and_fetched(stack):
+    first = stack.client("run", "https://youtu.be/capman3", "--mode", "captions")
+    time.sleep(0.05)
+    second = stack.client("run", "https://youtu.be/v7", "--language", "hu", "--no-diarize")
+    assert first["status"] == second["status"] == "done"
+    listed = _api_get(stack, "/results?since=0")["results"]
+    assert [r["mode"] for r in listed] == ["captions", "local"]
+    assert listed[0]["video"]["id"] == "youtube_capman3" and listed[0]["captions"]["kind"] == "manual"
+    newer = _api_get(stack, f"/results?since={listed[0]['finished_at']}&after={listed[0]['result_id']}")
+    assert [r["result_id"] for r in newer["results"]] == [listed[1]["result_id"]]
+    page = _api_get(stack, "/results?since=0&limit=1")
+    assert page["more"] is True and [r["result_id"] for r in page["results"]] == [listed[0]["result_id"]]
+    full = _api_get(stack, f"/results/{listed[1]['result_id']}")
+    assert full["mode"] == "local" and len(full["segments"]) == listed[1]["segments"]
+    assert "Jó napot." in _api_get(stack, f"/results/{listed[1]['result_id']}?format=txt")
+    for bad in ("youtube_v7/..", "a.b/c", "youtube_v7/nope"):
+        try:
+            _api_get(stack, f"/results/{bad}")
+            raise AssertionError(f"{bad} should be refused")
+        except urllib.error.HTTPError as exc:
+            assert exc.code == 404

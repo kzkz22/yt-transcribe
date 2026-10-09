@@ -5,12 +5,14 @@ PUT  /uploads/{sha256}     upload a local audio/video file (raw body, ?name=file
 POST /jobs                 submit a video URL or an upload_id   -> {job_id, status, ...}
 GET  /jobs/{id}            poll                                 -> {status, stage, elapsed_s, ...}
 GET  /jobs/{id}/result     ?format=txt|srt|json                 -> transcript
+GET  /results?since=T      finished results newer than T (unix time), oldest first
+GET  /results/{video}/{key}?format=txt|srt|json                  -> one finished result
 GET  /health
 
-Each job says how it should be transcribed: mode (local | cloud), model and
-language; anything left out takes the service's default. Local jobs are sent
-to the GPU worker through llama-swap (local.py), cloud jobs to AssemblyAI
-(cloud.py). One job runs at a time, each in its own child process (see
+Each job says how it should be transcribed: mode (local | cloud | captions),
+model and language; anything left out takes the service's default. Local jobs
+are sent to the GPU worker through llama-swap (local.py), cloud jobs to
+AssemblyAI (cloud.py), captions jobs fetch YouTube's own subtitles (captions.py). One job runs at a time, each in its own child process (see
 runner.py). Finished results are cached on disk under DATA_DIR per video and
 option set, so asking again returns immediately, and the same video can be
 kept in both modes.
@@ -22,6 +24,7 @@ import json
 import logging
 import os
 import queue
+import re
 import shutil
 import subprocess
 import sys
@@ -57,7 +60,7 @@ _queue: "queue.Queue[str]" = queue.Queue()
 class JobRequest(BaseModel):
     url: str | None = Field(default=None, description="Video URL (anything yt-dlp can read)")
     upload_id: str | None = Field(default=None, description="Id returned by PUT /uploads/{sha256}")
-    mode: str | None = Field(default=None, description="local or cloud; default from DEFAULT_MODE")
+    mode: str | None = Field(default=None, description="local, cloud or captions; default from DEFAULT_MODE")
     model: str | None = Field(default=None, description="Depends on mode; see GET /health")
     language: str | None = Field(default=None, description="ISO code such as hu or en; omit to auto-detect")
     diarize: bool = True
@@ -75,14 +78,18 @@ class JobRequest(BaseModel):
         if self.upload_id and not _is_sha256(self.upload_id):
             raise ValueError("upload_id is not valid")
         self.mode = (self.mode or SETTINGS.default_mode).strip().lower()
-        if self.mode not in ("local", "cloud"):
-            raise ValueError("mode must be local or cloud")
+        if self.mode not in ("local", "cloud", "captions"):
+            raise ValueError("mode must be local, cloud or captions")
+        if self.mode == "captions" and not self.url:
+            raise ValueError("captions mode needs a video URL; uploaded files have no captions")
         if self.language is not None:
             self.language = self.language.strip().lower() or None
             if self.language == "auto":
                 self.language = None
         if self.min_speakers and self.max_speakers and self.min_speakers > self.max_speakers:
             raise ValueError("min_speakers must not be greater than max_speakers")
+        if self.mode == "captions":  # no speakers: keep equivalent requests on one cache entry
+            self.diarize, self.num_speakers, self.min_speakers, self.max_speakers = False, None, None, None
         self.model = _resolve_model(self.mode, self.model, self.language)
         return self
 
@@ -94,6 +101,10 @@ def _is_sha256(value: str) -> bool:
 def _resolve_model(mode: str, model: str | None, language: str | None) -> str:
     """Validate the model for the mode and return the name the job will actually use."""
     model = (model or "").strip().lower() or None
+    if mode == "captions":
+        if model not in (None, "auto", "youtube"):
+            raise ValueError("captions mode has no model choice; leave model empty")
+        return "youtube"
     if mode == "cloud":
         if not SETTINGS.assemblyai_api_key:
             raise ValueError("cloud mode is not set up: ASSEMBLYAI_API_KEY is missing on the service")
@@ -112,7 +123,7 @@ def _cache_path(video_id: str, req: JobRequest) -> Path:
     key = json.dumps([req.mode, req.model, req.language, req.diarize, req.num_speakers,
                       req.min_speakers, req.max_speakers], sort_keys=True)
     digest = hashlib.sha1(key.encode()).hexdigest()[:10]
-    safe_id = "".join(c if c.isalnum() or c in "-_" else "_" for c in video_id)
+    safe_id = "".join(c if (c.isascii() and c.isalnum()) or c in "-_" else "_" for c in video_id)[:150]
     return CACHE_DIR / safe_id / digest
 
 
@@ -136,6 +147,7 @@ def _summary(result: dict) -> dict:
         "language": result["language"], "diarized": result["diarized"],
         "mode": result.get("mode", "local"), "model": result.get("model"),
         "device": result.get("device"), "cloud": result.get("cloud"),
+        "captions": result.get("captions"),
         "speakers": result["speakers"], "warnings": result.get("warnings", []),
         "segments": len(result["segments"]),
         "characters": sum(len(s["text"]) for s in result["segments"]),
@@ -232,6 +244,7 @@ def health() -> dict:
         "local": {"default_model": SETTINGS.whisper_model,
                   "models": sorted({SETTINGS.whisper_model, *SETTINGS.local_models}),
                   "worker_url": SETTINGS.worker_url},
+        "captions": {"available": True, "source": "YouTube subtitles through yt-dlp"},
         "cloud": {"available": bool(SETTINGS.assemblyai_api_key), "provider": "assemblyai",
                   "default_model": SETTINGS.cloud_default_model, "models": cloud.choices(),
                   "hours_used_this_month": round(usage.used_seconds(str(DATA_DIR)) / 3600, 2),
@@ -341,6 +354,59 @@ def result(job_id: str, format: Literal["txt", "srt", "json"] = "txt"):
     if job["status"] != "done":
         raise HTTPException(status_code=409, detail=f"Job is {job['status']}, not done.")
     path = Path(job["path"])
+    if format == "json":
+        return JSONResponse(json.loads((path / "result.json").read_text(encoding="utf-8")))
+    return PlainTextResponse((path / f"transcript.{format}").read_text(encoding="utf-8"))
+
+
+# Finished results, whoever submitted them (web UI, Hermes, ...). The web UI polls this to
+# copy new transcripts into its library. Results are ordered by (finished_at, result_id);
+# the caller passes back the last pair it has seen as since=<finished_at>&after=<result_id>.
+# A rerun with force=true rewrites a result, so it is listed again: upsert by result_id.
+# finished_at is the file's mtime, so a backwards clock step can hide a result.
+_SAFE_PART = re.compile(r"^[A-Za-z0-9_-]{1,200}$")
+
+
+def _result_meta(result_file: Path, mtime: float) -> dict | None:
+    try:
+        result = json.loads(result_file.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return {
+        "result_id": f"{result_file.parent.parent.name}/{result_file.parent.name}",
+        "finished_at": mtime,
+        "video": result.get("video"), "language": result.get("language"),
+        "mode": result.get("mode", "local"), "model": result.get("model"),
+        "diarized": result.get("diarized"), "speakers": result.get("speakers", []),
+        "captions": result.get("captions"), "cloud": result.get("cloud"),
+        "segments": len(result.get("segments") or []),
+    }
+
+
+@app.get("/results")
+def list_results(since: float = 0, after: str = "", limit: int = 200) -> dict:
+    limit = max(1, min(limit, 1000))
+    found = []
+    for result_file in CACHE_DIR.glob("*/*/result.json"):
+        try:
+            mtime = result_file.stat().st_mtime
+        except OSError:
+            continue
+        result_id = f"{result_file.parent.parent.name}/{result_file.parent.name}"
+        if mtime > since or (mtime == since and result_id > after):
+            found.append((mtime, result_id, result_file))
+    found.sort()
+    items = [m for m in (_result_meta(f, t) for t, _id, f in found[:limit]) if m]
+    return {"results": items, "more": len(found) > limit}
+
+
+@app.get("/results/{video_key}/{result_key}")
+def get_result(video_key: str, result_key: str, format: Literal["txt", "srt", "json"] = "json"):
+    if not (_SAFE_PART.match(video_key) and _SAFE_PART.match(result_key)):
+        raise HTTPException(status_code=404, detail="Unknown result.")
+    path = CACHE_DIR / video_key / result_key
+    if not (path / "result.json").exists():
+        raise HTTPException(status_code=404, detail="Unknown result.")
     if format == "json":
         return JSONResponse(json.loads((path / "result.json").read_text(encoding="utf-8")))
     return PlainTextResponse((path / f"transcript.{format}").read_text(encoding="utf-8"))

@@ -1,0 +1,22 @@
+{
+  "wireMagic": "pb3",
+  "pens": [ {} ],
+  "wsWinStyles": [ {}, {"mhModeHint": 2, "juJustifCode": 0, "sdScrollDir": 3} ],
+  "wpWinPositions": [ {}, {"apPoint": 6, "ahHorPos": 20, "avVerPos": 100, "rcRows": 2, "ccCols": 40} ],
+  "events": [
+    {"tStartMs": 0, "dDurationMs": 850920, "id": 1, "wpWinPosId": 1, "wsWinStyleId": 1},
+    {"tStartMs": 280, "dDurationMs": 4880, "wWinId": 1, "segs": [
+      {"utf8": "Sziasztok,", "acAsrConf": 0}, {"utf8": " Laci", "tOffsetMs": 439, "acAsrConf": 0},
+      {"utf8": " vagyok,", "tOffsetMs": 639, "acAsrConf": 0}, {"utf8": " a", "tOffsetMs": 840, "acAsrConf": 0},
+      {"utf8": " T2-t", "tOffsetMs": 919, "acAsrConf": 0}, {"utf8": " nézitek,", "tOffsetMs": 1400, "acAsrConf": 0} ]},
+    {"tStartMs": 2230, "dDurationMs": 2930, "wWinId": 1, "aAppend": 1, "segs": [ {"utf8": "\n"} ]},
+    {"tStartMs": 2240, "dDurationMs": 4960, "wWinId": 1, "segs": [
+      {"utf8": "és", "acAsrConf": 0}, {"utf8": " a", "tOffsetMs": 280, "acAsrConf": 0},
+      {"utf8": " mai", "tOffsetMs": 520, "acAsrConf": 0}, {"utf8": " videóban", "tOffsetMs": 760, "acAsrConf": 0},
+      {"utf8": " hoztam", "tOffsetMs": 1320, "acAsrConf": 0}, {"utf8": " nektek", "tOffsetMs": 1760, "acAsrConf": 0},
+      {"utf8": " tíz", "tOffsetMs": 2360, "acAsrConf": 0}, {"utf8": " kütyüt.", "tOffsetMs": 2800, "acAsrConf": 0} ]},
+    {"tStartMs": 9520, "dDurationMs": 2100, "wWinId": 1, "segs": [
+      {"utf8": "Ez", "acAsrConf": 0}, {"utf8": " a", "tOffsetMs": 400, "acAsrConf": 0},
+      {"utf8": " kedvencem.", "tOffsetMs": 700, "acAsrConf": 0} ]}
+  ]
+}

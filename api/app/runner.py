@@ -15,7 +15,7 @@ import logging
 import sys
 from pathlib import Path
 
-from . import cloud, formatting, local, pipeline
+from . import captions, cloud, formatting, local, pipeline
 
 log = logging.getLogger("yt-transcribe")
 
@@ -53,6 +53,8 @@ def main(job_dir: Path) -> int:
         if opts.mode == "cloud":  # no GPU, no local models: the provider does the work
             state["device"] = "cloud"
             write_result(result_path, cloud.run(opts, job["video"], settings, stage))
+        elif opts.mode == "captions":  # YouTube's own subtitles: no GPU, no cost
+            write_result(result_path, captions.run(opts, job["video"], settings, stage))
         else:
             write_result(result_path, local.run(opts, job["video"], settings, stage))
         return 0

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Client for the yt-transcribe service. Standard library only.
 
-  yt_transcribe.py run SOURCE [--mode local|cloud] [--model NAME] [--language hu|en]
+  yt_transcribe.py run SOURCE [--mode local|cloud|captions] [--model NAME] [--language hu|en]
                               [--speakers N] [--no-diarize] [--force]
   yt_transcribe.py wait JOB_ID
   yt_transcribe.py health
@@ -135,8 +135,9 @@ def _follow(server: str, job: dict, wait_s: int, out_dir: str) -> None:
                 speakers=job.get("speakers", []), warnings=job.get("warnings", []),
                 characters=job.get("characters"), cached=bool(job.get("cached")),
                 elapsed_s=job.get("elapsed_s", 0), files=_save(server, job, out_dir))
-    if job.get("cloud"):
-        base["cloud"] = job["cloud"]
+    for key in ("cloud", "captions"):
+        if job.get(key):
+            base[key] = job[key]
     _emit(base)
 
 
@@ -159,8 +160,10 @@ def main() -> None:
 
     run = sub.add_parser("run", parents=[common], help="submit a video and wait")
     run.add_argument("source", help="video URL, or path of a local audio/video file")
-    run.add_argument("--mode", choices=["local", "cloud"],
-                     help="where to transcribe (default: the service's default, normally local)")
+    run.add_argument("--mode", choices=["local", "cloud", "captions"],
+                     help="local (Whisper on the GPU server), cloud (AssemblyAI) or captions "
+                          "(YouTube's own subtitles, fast, no speakers); default: the service's, "
+                          "normally local")
     run.add_argument("--model", help="local: large-v3 | large-v3-turbo; "
                                      "cloud: auto | universal-2 | universal-3.5-pro")
     run.add_argument("--language", help="hu, en, ... (default: auto-detect)")

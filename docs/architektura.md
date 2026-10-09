@@ -67,6 +67,12 @@ Kapcsolódó leírások: [telepítés](telepites.md) · [frissítés](frissites.
 5. Amíg ez a kérés nyitva van, az LLM-kérések sorban várnak. A következő LLM-kérésre a llama-swap leállítja a workert, és visszaindítja a llama.cpp konténert.
 6. Az API elkészíti a TXT-, SRT- és JSON-fájlokat. A skill beolvassa az átiratot, és a Qwen megírja az összefoglalót.
 
+### Átírás felirat módban (YouTube-felirat)
+
+1. A skill vagy a webes felület `captions` móddal küldi a kérést.
+2. Az API a yt-dlp-vel egyetlen feliratsávot tölt le: a videó nyelvén a feltöltő saját feliratát, ha nincs, a YouTube automatikus feliratát (`json3` formátumban).
+3. A szavakból vagy sorokból ugyanolyan szegmensek készülnek, mint a többi módban, beszélők nélkül. GPU, Unraid és költség nem kell hozzá. Ha a felirat nem elég jó, ugyanaz a videó helyi vagy felhős módban is kérhető.
+
 ### Átírás felhős módban
 
 1. A skill `--mode cloud` kapcsolóval küldi a kérést, csak ha ezt kifejezetten kéred.

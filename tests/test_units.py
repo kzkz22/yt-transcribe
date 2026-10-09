@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "api"))
 
-from app import cloud, formatting, local, pipeline, usage  # noqa: E402
+from app import captions, cloud, formatting, local, pipeline, usage  # noqa: E402
 
 
 def test_relabel_by_first_appearance_and_inherit_missing():
@@ -95,3 +95,38 @@ def test_worker_query_leaves_out_unset_options():
     opts = pipeline.Options(url="u", model="large-v3-turbo", language="hu", diarize=False, num_speakers=3)
     assert local._query(opts) == "model=large-v3-turbo&language=hu&diarize=false&num_speakers=3"
     assert local._query(pipeline.Options(url="u")) == "model=large-v3&diarize=true"
+
+
+_T = [{"ext": "json3", "url": "u"}]
+
+
+@pytest.mark.parametrize("info,language,expected", [
+    ({"language": "en-US", "subtitles": {"en-US": _T, "nl-NL": _T}, "automatic_captions": {"it-orig": _T}},
+     None, ("manual", "en-US")),
+    ({"language": "en-US", "subtitles": {"en": _T}}, None, ("manual", "en")),
+    ({"language": "hu", "automatic_captions": {"hu-en": _T, "hu": _T, "hu-orig": _T}}, None, ("auto", "hu-orig")),
+    ({"language": "hu", "automatic_captions": {"hu-en": _T, "hu": _T}}, None, ("auto", "hu")),
+    ({"automatic_captions": {"de-orig": _T, "en": _T}}, None, ("auto", "de-orig")),
+    ({"language": "en", "subtitles": {"hu": _T}, "automatic_captions": {"en-orig": _T}}, "hu", ("manual", "hu")),
+    ({"language": "de", "automatic_captions": {"en": _T, "de-en": _T}}, None, None),
+    ({"subtitles": {"live_chat": _T}}, None, None),
+    # next to en-orig, plain "hu" is a machine translation: never use it
+    ({"language": "en", "automatic_captions": {"en-orig": _T, "en": _T, "hu": _T}}, "hu", None),
+    ({"language": "en", "automatic_captions": {"en-orig": _T, "en": _T, "hu": _T}}, None, ("auto", "en-orig")),
+    # the script subtag must match
+    ({"language": "zh-Hans", "subtitles": {"zh-Hant": _T}}, None, None),
+    ({"language": "zh-Hans", "subtitles": {"zh-Hant": _T, "zh-Hans": _T}}, None, ("manual", "zh-Hans")),
+    ({"language": "sr-Latn", "subtitles": {"sr": _T}}, None, None),
+])
+def test_caption_track_choice(info, language, expected):
+    got = captions.choose_track(info, language)
+    assert (got[0], got[1]) == expected if expected else got is None
+
+
+def test_json3_words_get_end_times_and_annotations_are_dropped():
+    data = {"events": [{"tStartMs": 1000, "dDurationMs": 3000, "segs": [
+        {"utf8": "Szia"}, {"utf8": " [Zene]", "tOffsetMs": 500}, {"utf8": " világ.", "tOffsetMs": 900}]},
+        {"tStartMs": 3000, "dDurationMs": 10, "aAppend": 1, "segs": [{"utf8": "\n"}]}]}
+    words = captions.words_from_json3(data, "auto")
+    assert [w["text"] for w in words] == ["Szia", "világ."]
+    assert words[0]["start"] == 1.0 and words[0]["end"] == 1.5 and words[1]["end"] <= 3.9

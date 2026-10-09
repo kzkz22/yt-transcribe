@@ -10,7 +10,8 @@ Group=yttranscribe
 EnvironmentFile=/etc/yt-transcribe/api.env
 WorkingDirectory=/opt/yt-transcribe/api
 # YouTube changes often; an outdated yt-dlp is the usual reason downloads break.
-ExecStartPre=-/opt/yt-transcribe/venv/bin/pip install --quiet --upgrade "yt-dlp[default]"
+# curl-cffi lets yt-dlp look like a browser; without it YouTube soon answers HTTP 429.
+ExecStartPre=-/opt/yt-transcribe/venv/bin/pip install --quiet --upgrade "yt-dlp[default,curl-cffi]"
 ExecStart=/opt/yt-transcribe/venv/bin/uvicorn app.server:app --host 0.0.0.0 --port 8765
 Restart=on-failure
 RestartSec=5

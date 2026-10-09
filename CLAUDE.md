@@ -5,10 +5,15 @@ videos and local audio/video files. Three parts:
 
 - `api/` — FastAPI service (port 8765), runs in an always-on Proxmox LXC without a GPU.
   Downloads (yt-dlp), converts to 16 kHz mono FLAC (ffmpeg), job queue, uploads, result
-  cache, output files. Transcribes in one of two modes:
+  cache, output files, `GET /results?since=&after=` listing of finished results for the web UI
+  (ordered by (mtime, result_id); a forced rerun is listed again, so clients upsert by result_id).
+  Produces a transcript in one of three modes:
   - **local**: sends the FLAC to the GPU worker through llama-swap (`local.py`).
   - **cloud**: AssemblyAI pre-recorded API (`universal-2`, `universal-3-5-pro`); the GPU server
     may be off.
+  - **captions**: YouTube's own subtitles via yt-dlp (`captions.py`): ONE track in the video's
+    language (uploader's own, else auto `<lang>-orig`, else `<lang>`), `json3`, no speakers, URL only.
+    Needs `yt-dlp[default,curl-cffi]` (without impersonation YouTube answered 429 quickly).
 - `gpu-worker/` — FastAPI container on the Unraid GPU server (port 8766): WhisperX
   (faster-whisper `large-v3` / `large-v3-turbo`) → wav2vec2 alignment → pyannote
   `speaker-diarization-community-1`. Returns raw segments with diarizer speaker ids.
@@ -53,6 +58,7 @@ Consequences — keep them:
 | `api/app/runner.py` | Child process per job (`python -m app.runner <job_dir>`); isolates crashes |
 | `api/app/pipeline.py` | Settings (env vars), `Options`, audio sources (URL / upload), `to_flac` |
 | `api/app/local.py` | Local mode: stream the FLAC to the worker, follow progress, name speakers |
+| `api/app/captions.py` | Captions mode: track choice, json3 download and parsing into segments |
 | `api/app/cloud.py` | AssemblyAI client, model resolution (`auto`), cost estimate, delete-after-use |
 | `api/app/usage.py` | Monthly cloud-hours budget (`DATA_DIR/cloud_usage.json`) |
 | `api/app/formatting.py` | Pure functions: speaker relabelling, paragraphs, TXT/SRT, word → segment grouping |

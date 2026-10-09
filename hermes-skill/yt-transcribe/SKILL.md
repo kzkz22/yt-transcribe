@@ -1,7 +1,7 @@
 ---
 name: yt-transcribe
 description: Speaker-labelled video transcripts and summaries
-version: 2.0.0
+version: 2.1.0
 author: Zoltán
 license: MIT
 metadata:
@@ -71,9 +71,16 @@ a video instead of using the saved result.
 
 ## Mode and model
 
-The service transcribes either on the user's own server (`local`) or with a
-paid cloud provider (`cloud`). Cloud mode sends the audio to a third party and
-uses a monthly budget, so it is the user's decision, never yours.
+The service transcribes on the user's own server (`local`), with a paid cloud
+provider (`cloud`), or takes YouTube's own subtitles (`captions`). Cloud mode
+sends the audio to a third party and uses a monthly budget, so it is the
+user's decision, never yours.
+
+`captions` is fast and free and needs no GPU, but has no speaker labels, and
+automatic captions contain recognition errors. Pass `--mode captions` only when
+the user asks for it ("a YouTube felirata alapján", "gyorsan, felirat alapján",
+"from the captions"). If a captions transcript is poor or the user asks for a
+better one, offer `--mode local` (or `cloud`); the earlier result is kept.
 
 - Pass `--mode cloud` only when the user asks for it in this request (for
   example "felhőben", "in the cloud", "AssemblyAI"). Pass `--mode local` when
@@ -81,7 +88,7 @@ uses a monthly budget, so it is the user's decision, never yours.
 - Pass `--model` only when the user names a model. Local: `large-v3` (most
   accurate) or `large-v3-turbo` (faster). Cloud: `universal-2`,
   `universal-3.5-pro`, or `auto` (the default, which picks the better model
-  the language allows).
+  the language allows). Captions: no model.
 - If a job fails in one mode, do not retry it in the other mode on your own.
   Report the error and let the user choose.
 - The output shows which `mode` and `model` produced the transcript. For cloud
@@ -163,6 +170,11 @@ done and makes the model reload. So:
   again, report it to the user.
 - `warnings` mentions `ran on CPU` or `finished on CPU`: the GPU could not be
   used, so the job was slow. Pass the warning on to the user as it is.
+- `This video has no captions in its language`: there are no YouTube
+  subtitles to use. Tell the user and offer local or cloud mode; do not switch
+  on your own.
+- `could not download the captions: HTTP Error 429`: YouTube refused for now.
+  Tell the user to try again later, or offer local mode.
 - `universal-3.5-pro does not support the language`: that cloud model cannot
   do this language (Hungarian among others). Rerun with `--model auto`.
 - `The monthly cloud budget would be exceeded`: tell the user. Offer local

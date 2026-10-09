@@ -6,7 +6,8 @@ videos and local audio/video files. Three parts:
 - `api/` — FastAPI service (port 8765), runs in an always-on Proxmox LXC without a GPU.
   Downloads (yt-dlp), converts to 16 kHz mono FLAC (ffmpeg), job queue, uploads, result
   cache, output files, `GET /results?since=&after=` listing of finished results for the web UI
-  (ordered by (mtime, result_id); a forced rerun is listed again, so clients upsert by result_id).
+  (ordered by (mtime, result_id); a forced rerun is listed again, so clients upsert by result_id;
+  `GET /jobs/{id}` also returns the job's `result_id`).
   Produces a transcript in one of three modes:
   - **local**: sends the FLAC to the GPU worker through llama-swap (`local.py`).
   - **cloud**: AssemblyAI pre-recorded API (`universal-2`, `universal-3-5-pro`); the GPU server
@@ -101,7 +102,8 @@ Consequences — keep them:
 
 - Verified on the real server (before the split): the WhisperX GPU path (one 14-min video ≈ 23 s).
 - Verified on the real servers (2026-10-09, owner): llama-swap + Unraid API script, LiteLLM incl.
-  cloud fallback, Hermes through LiteLLM, the split API/worker in local mode.
+  cloud fallback, Hermes through LiteLLM, the split API/worker in local mode, captions mode
+  (Hungarian auto `hu-orig` track) and the `/results` listing.
 - Not yet verified for real: the whole cloud transcription mode (real AssemblyAI not yet called),
   uploads, budget; OpenCode/VS Code through LiteLLM. Treat behaviour of the real
   AssemblyAI API (Hungarian accuracy, diarization for Hungarian) as unknown until tested.

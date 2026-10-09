@@ -235,6 +235,8 @@ def test_finished_results_can_be_listed_and_fetched(stack):
     listed = _api_get(stack, "/results?since=0")["results"]
     assert [r["mode"] for r in listed] == ["captions", "local"]
     assert listed[0]["video"]["id"] == "youtube_capman3" and listed[0]["captions"]["kind"] == "manual"
+    # a job reports the id its result is listed under, so a client can match the two
+    assert _api_get(stack, f"/jobs/{first['job_id']}")["result_id"] == listed[0]["result_id"]
     newer = _api_get(stack, f"/results?since={listed[0]['finished_at']}&after={listed[0]['result_id']}")
     assert [r["result_id"] for r in newer["results"]] == [listed[1]["result_id"]]
     page = _api_get(stack, "/results?since=0&limit=1")

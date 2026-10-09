@@ -3,7 +3,7 @@
 GET  /uploads/{sha256}     is this file already on the server?
 PUT  /uploads/{sha256}     upload a local audio/video file (raw body, ?name=file.mp4)
 POST /jobs                 submit a video URL or an upload_id   -> {job_id, status, ...}
-GET  /jobs/{id}            poll                                 -> {status, stage, elapsed_s, ...}
+GET  /jobs/{id}            poll                                 -> {status, stage, elapsed_s, result_id, ...}
 GET  /jobs/{id}/result     ?format=txt|srt|json                 -> transcript
 GET  /results?since=T      finished results newer than T (unix time), oldest first
 GET  /results/{video}/{key}?format=txt|srt|json                  -> one finished result
@@ -130,6 +130,8 @@ def _cache_path(video_id: str, req: JobRequest) -> Path:
 def _public(job: dict) -> dict:
     out = {k: job[k] for k in ("job_id", "status", "stage", "device", "video", "error", "cached")
            if job.get(k) is not None}
+    path = Path(job["path"])  # the same id as in GET /results, so a client can match the two
+    out["result_id"] = f"{path.parent.name}/{path.name}"
     start = job.get("started_at")
     if start:
         out["elapsed_s"] = int((job.get("finished_at") or time.time()) - start)

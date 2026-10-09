@@ -26,7 +26,7 @@ Kapcsolódó leírások: [telepítés](telepites.md) · [frissítés](frissites.
 | LiteLLM | Proxmox, `ai-router` LXC | 4000 | Egyetlen belépési pont az LLM-ekhez: modellnevek, kontextusméretek, tartalékváltás felhőre. | Kész |
 | llama-swap | Proxmox, `ai-router` LXC | 8080 | Sorba állítja a kéréseket, és mindig csak egy GPU-s konténert enged futni. A konténereket az Unraid API-n át indítja és állítja le (`unraid-container.sh`). | Kész |
 | yt-transcribe API | Proxmox, `ai-router` LXC | 8765 | Letöltés (yt-dlp), átalakítás 16 kHz-es mono FLAC-ká (ffmpeg), feltöltött fájlok, feladatsor, felhős átírás, kimeneti fájlok. | Kész |
-| Felhős LLM | OpenRouter | – | `cloud/qwen3.8-flash`, `cloud/mimo-v2.6-flash`, `cloud/gemini-3.8-flash`, és az `auto` tartaléka. | Kész |
+| Felhős LLM | OpenRouter | – | `cloud/qwen3.8-flash`, `cloud/mimo-v2.6-flash`, `cloud/gemini-3.8-flash`, és az `auto` meg az `osszefoglalo` tartaléka. | Kész |
 | AssemblyAI | Felhő | – | Felhős átírás beszélőfelismeréssel, csak kifejezett kérésre. | Kódban kész |
 | YouTube és más oldalak | Internet | – | A videók forrása; a yt-dlp innen tölti le a hangot. | Külső |
 | Unraid API | Unraid | 80 (`/graphql`) | Konténerek indítása és leállítása, csak Docker-jogú API-kulccsal. | Kész |
@@ -88,6 +88,8 @@ A LiteLLM a modellválasztóban a konfigurációjában felsorolt összes nevet m
 | A 6 preset neve, pl. `Qwen3.8-27B-UD-Q4_K_XL-Code` | llama-swap → llama.cpp konténer | Hibát ad |
 | `cloud/qwen3.8-flash`, `cloud/mimo-v2.6-flash`, `cloud/gemini-3.8-flash` | Csak az OpenRouter | Működik |
 | `auto` | Először a helyi Qwen3.8-27B Code preset, hiba esetén `cloud/qwen3.8-flash` | Átvált a felhőre |
+| `osszefoglalo` | A webes felület összefoglalói és fordításai nyilvános forrásnál (YouTube, URL): helyi Qwen3.8-27B Gnrl preset, hiba esetén `cloud/qwen3.8-flash` | Átvált a felhőre |
+| `osszefoglalo-helyi` | Ugyanez saját felvételnél (feltöltés, Samba): csak a helyi Gnrl preset | Hibát ad; a webes felület vár, amíg az Unraid be nem kapcsol |
 
 ## Miért kell a LiteLLM is, ha van llama-swap?
 
@@ -126,7 +128,7 @@ A válaszidőt a modellváltás határozza meg (konténerindítás és betölté
 
 ## Alapelvek
 
-- **Nincs csendes átváltás a felhőbe.** Felhőbe csak a `cloud/…` nevek, az `auto` tartaléka és a kifejezetten kért felhős átírás visz adatot. A helyi átírás akkor sem megy a felhőbe, ha az Unraid ki van kapcsolva.
+- **Nincs csendes átváltás a felhőbe.** Felhőbe csak a `cloud/…` nevek, az `auto` és az `osszefoglalo` tartaléka és a kifejezetten kért felhős átírás visz adatot. A helyi átírás akkor sem megy a felhőbe, ha az Unraid ki van kapcsolva.
 - **Az átírás alapból helyi.** A felhős átírást havi órakeret korlátozza; túllépésnél a munka el sem indul.
 - **A modellek az Unraidon maradnak,** a GPU mellett, a helyi NVMe-n. A Proxmox csak irányít, modellt nem futtat.
 - **A GPU-t csak a llama-swap osztja ki.** GPU-s konténert nem indítunk kézzel az Unraid felületén, és a kliensek nem érik el közvetlenül a konténerek portjait.

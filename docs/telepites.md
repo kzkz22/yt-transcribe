@@ -202,6 +202,8 @@ ip route del unreachable 192.168.1.20
 
 A konténer leállítása nem jó próba, mert a llama-swap egyszerűen újraindítja.
 
+Az `osszefoglalo` és az `osszefoglalo-helyi` név a webes felületé (yt-transcribe-webui): összefoglalóhoz és fordításhoz. Mindkettő a helyi Qwen3.8-27B Gnrl presetre mutat; az `osszefoglalo` kikapcsolt Unraid mellett a felhőre vált (nyilvános tartalomhoz), az `osszefoglalo-helyi` nem (saját felvételhez). A próbája ugyanaz, mint az `auto`-é: az `ip route add unreachable` alatt az `osszefoglalo` felhős választ ad, az `osszefoglalo-helyi` hibát.
+
 ### 2.4 yt-transcribe API
 
 ```bash

@@ -145,7 +145,7 @@ A verzió rögzítve van, mert a LiteLLM gyakran ad ki új verziót, és a vált
 ### Felhős modell cseréje
 
 Egy OpenRouter-modell cseréjéhez vagy hozzáadásához:
-1. Írd át a `/etc/litellm/config.yaml`-ban a `cloud/…` bejegyzést, a `model: openrouter/<szolgáltató>/<modell>` formában. Ha az `auto` tartalékát cseréled, a `fallbacks` sort is.
+1. Írd át a `/etc/litellm/config.yaml`-ban a `cloud/…` bejegyzést, a `model: openrouter/<szolgáltató>/<modell>` formában. Ha az `auto` vagy az `osszefoglalo` tartalékát cseréled, a `fallbacks` sorát is.
 2. `systemctl restart litellm`.
 3. Az OpenCode `opencode.json`-jában is frissítsd.
 

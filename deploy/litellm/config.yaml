@@ -2,9 +2,11 @@
 #   local names  -> llama-swap in the same LXC -> Unraid (error when Unraid is off)
 #   cloud/...    -> OpenRouter only
 #   auto         -> local Qwen3.8-27B Code first; on error the cloud Qwen3.8 Flash
+#   osszefoglalo -> web UI summaries/translations of PUBLIC sources: local Qwen3.8-27B Gnrl,
+#                   on error the cloud Qwen3.8 Flash
+#   osszefoglalo-helyi -> the same for OWN recordings: local only, an error when Unraid is off
 # model_info is what clients read from /v1/models (context window, output limit).
-# Only these three kinds of names exist, so data reaches the cloud only through
-# a cloud/... name or the auto fallback.
+# Data reaches the cloud only through a cloud/... name or the auto / osszefoglalo fallback.
 
 model_list:
   # ---- Local presets (names as in models.ini on Unraid) ----
@@ -48,9 +50,18 @@ model_list:
     model_info: { max_input_tokens: 180000, max_output_tokens: 32768, supports_vision: true }
     litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Code }
 
+  # ---- Web UI (yt-webui): summaries and translations ----
+  - model_name: osszefoglalo
+    model_info: { max_input_tokens: 180000, max_output_tokens: 40960, supports_vision: true }
+    litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Gnrl }
+  - model_name: osszefoglalo-helyi
+    model_info: { max_input_tokens: 180000, max_output_tokens: 40960, supports_vision: true }
+    litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Gnrl }
+
 router_settings:
   fallbacks:
     - auto: [cloud/qwen3.8-flash]
+    - osszefoglalo: [cloud/qwen3.8-flash]
   num_retries: 0             # a down Unraid does not get better by retrying
   allowed_fails: 1
   cooldown_time: 30          # after a failure, skip the local server for 30 s

@@ -51,12 +51,18 @@ model_list:
     litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Code }
 
   # ---- Web UI (yt-webui): summaries and translations ----
+  # Thinking off: with it a 3-minute video's summary took 16k tokens and 8 minutes, with no gain.
+  # llama-server passes chat_template_kwargs to the Qwen chat template; the cloud fallback is
+  # its own entry and is not affected.
   - model_name: osszefoglalo
     model_info: { max_input_tokens: 180000, max_output_tokens: 40960, supports_vision: true }
-    litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Gnrl }
+    litellm_params: &summary
+      <<: *local
+      model: openai/Qwen3.8-27B-UD-Q4_K_XL-Gnrl
+      extra_body: { chat_template_kwargs: { enable_thinking: false } }
   - model_name: osszefoglalo-helyi
     model_info: { max_input_tokens: 180000, max_output_tokens: 40960, supports_vision: true }
-    litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Gnrl }
+    litellm_params: *summary
 
 router_settings:
   fallbacks:

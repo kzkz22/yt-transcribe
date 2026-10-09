@@ -3,7 +3,7 @@
 #   cloud/...    -> OpenRouter only
 #   auto         -> local Qwen3.8-27B Code first; on error the cloud Qwen3.8 Flash
 #   osszefoglalo -> web UI summaries/translations of PUBLIC sources: local Qwen3.8-27B Gnrl,
-#                   on error the cloud Qwen3.8 Flash
+#                   on error the cloud Qwen3.8 Flash without thinking (cloud/qwen3.8-flash-gyors)
 #   osszefoglalo-helyi -> the same for OWN recordings: local only, an error when Unraid is off
 # model_info is what clients read from /v1/models (context window, output limit).
 # Data reaches the cloud only through a cloud/... name or the auto / osszefoglalo fallback.
@@ -44,6 +44,14 @@ model_list:
     litellm_params: { <<: *cloud, model: openrouter/xiaomi/mimo-v2.6-flash }
   - model_name: cloud/gemini-3.8-flash
     litellm_params: { <<: *cloud, model: openrouter/google/gemini-3.8-flash }
+  # The same Qwen3.8 Flash without thinking, for summaries and translations: with thinking a
+  # 3-minute video's summary took 22k tokens and 6 minutes. cloud/qwen3.8-flash keeps thinking
+  # for agentic clients (Hermes, OpenCode) and as the auto fallback.
+  - model_name: cloud/qwen3.8-flash-gyors
+    litellm_params:
+      <<: *cloud
+      model: openrouter/qwen/qwen3.8-flash
+      extra_body: { reasoning: { enabled: false } }
 
   # ---- auto: local first, cloud on error ----
   - model_name: auto
@@ -67,7 +75,7 @@ model_list:
 router_settings:
   fallbacks:
     - auto: [cloud/qwen3.8-flash]
-    - osszefoglalo: [cloud/qwen3.8-flash]
+    - osszefoglalo: [cloud/qwen3.8-flash-gyors]
   num_retries: 0             # a down Unraid does not get better by retrying
   allowed_fails: 1
   cooldown_time: 30          # after a failure, skip the local server for 30 s

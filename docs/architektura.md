@@ -87,8 +87,9 @@ A LiteLLM a modellválasztóban a konfigurációjában felsorolt összes nevet m
 | --- | --- | --- |
 | A 6 preset neve, pl. `Qwen3.8-27B-UD-Q4_K_XL-Code` | llama-swap → llama.cpp konténer | Hibát ad |
 | `cloud/qwen3.8-flash`, `cloud/mimo-v2.6-flash`, `cloud/gemini-3.8-flash` | Csak az OpenRouter | Működik |
+| `cloud/qwen3.8-flash-gyors` | Ugyanaz a Qwen3.8 Flash gondolkodás nélkül (`reasoning.enabled: false`), összefoglalóhoz és fordításhoz | Működik |
 | `auto` | Először a helyi Qwen3.8-27B Code preset, hiba esetén `cloud/qwen3.8-flash` | Átvált a felhőre |
-| `osszefoglalo` | A webes felület összefoglalói és fordításai nyilvános forrásnál (YouTube, URL): helyi Qwen3.8-27B Gnrl preset, hiba esetén `cloud/qwen3.8-flash` | Átvált a felhőre |
+| `osszefoglalo` | A webes felület összefoglalói és fordításai nyilvános forrásnál (YouTube, URL): helyi Qwen3.8-27B Gnrl preset, hiba esetén `cloud/qwen3.8-flash-gyors`; mindkettő gondolkodás nélkül | Átvált a felhőre |
 | `osszefoglalo-helyi` | Ugyanez saját felvételnél (feltöltés, Samba): csak a helyi Gnrl preset | Hibát ad; a webes felület vár, amíg az Unraid be nem kapcsol |
 
 ## Miért kell a LiteLLM is, ha van llama-swap?

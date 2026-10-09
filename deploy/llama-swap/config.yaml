@@ -1,0 +1,40 @@
+# llama-swap on Proxmox: one queue for the GPU of the Unraid server.
+# Every entry is an Unraid container that is started and stopped through the Unraid API
+# by unraid-container.sh. Only one entry runs at a time (llama-swap's default group).
+
+# Seconds a container may take to answer its checkEndpoint after the start.
+healthCheckTimeout: 180
+logLevel: info
+
+models:
+  # One llama.cpp container in router mode. The presets stay in models.ini on Unraid;
+  # the router loads the requested preset itself (--models-max 1, autoload on).
+  # The request's model name reaches the router unchanged, so every preset name is an alias.
+  llama-server:
+    name: "llama-server (Unraid, models.ini)"
+    cmd: /opt/llama-swap/unraid-container.sh run llama.cpp
+    cmdStop: /opt/llama-swap/unraid-container.sh stop llama.cpp ${PID}
+    proxy: http://192.168.1.20:8001
+    checkEndpoint: /health
+    unloadTimeout: 60
+    aliases:
+      - Qwen3.8-27B-UD-Q4_K_XL-Code
+      - Qwen3.8-27B-UD-Q4_K_XL-Gnrl
+      - Qwen3.6-35B-A3B-UD-IQ4_NL-Code
+      - Qwen3.6-35B-A3B-UD-IQ4_NL-Gnrl
+      - ThinkingCap-Qwen3.8-27B-Q4_K_M-Code
+      - Qwopus3.6-35B-A3B-Coder-Q4_K_M
+
+
+  # The yt-transcribe GPU worker (Whisper + pyannote). Not an LLM, so unlisted.
+  yt-transcribe-gpu:
+    name: "yt-transcribe GPU worker"
+    cmd: /opt/llama-swap/unraid-container.sh run yt-transcribe-gpu
+    cmdStop: /opt/llama-swap/unraid-container.sh stop yt-transcribe-gpu ${PID}
+    proxy: http://192.168.1.20:8766
+    checkEndpoint: /health
+    unloadTimeout: 60
+    unlisted: true   # not an LLM: keep it out of /v1/models
+    ttl: 600         # stop the worker after 10 idle minutes
+
+  # Strata comes here later, in the same shape.

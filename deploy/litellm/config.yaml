@@ -1,0 +1,62 @@
+# LiteLLM on Proxmox: the single LLM entry point for every client.
+#   local names  -> llama-swap in the same LXC -> Unraid (error when Unraid is off)
+#   cloud/...    -> OpenRouter only
+#   auto         -> local Qwen3.8-27B Code first; on error the cloud Qwen3.8 Flash
+# model_info is what clients read from /v1/models (context window, output limit).
+# Only these three kinds of names exist, so data reaches the cloud only through
+# a cloud/... name or the auto fallback.
+
+model_list:
+  # ---- Local presets (names as in models.ini on Unraid) ----
+  - model_name: Qwen3.8-27B-UD-Q4_K_XL-Code
+    model_info: { max_input_tokens: 180000, max_output_tokens: 32768, supports_vision: true }
+    litellm_params: &local
+      model: openai/Qwen3.8-27B-UD-Q4_K_XL-Code
+      api_base: http://127.0.0.1:8080/v1
+      api_key: "none"
+      timeout: 1800          # a model swap plus a long agentic answer
+      stream_timeout: 600    # wait for the first token, swap included
+  - model_name: Qwen3.8-27B-UD-Q4_K_XL-Gnrl
+    model_info: { max_input_tokens: 180000, max_output_tokens: 40960, supports_vision: true }
+    litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Gnrl }
+  - model_name: Qwen3.6-35B-A3B-UD-IQ4_NL-Code
+    model_info: { max_input_tokens: 242144, max_output_tokens: 32768, supports_vision: true }
+    litellm_params: { <<: *local, model: openai/Qwen3.6-35B-A3B-UD-IQ4_NL-Code }
+  - model_name: Qwen3.6-35B-A3B-UD-IQ4_NL-Gnrl
+    model_info: { max_input_tokens: 242144, max_output_tokens: 40960, supports_vision: true }
+    litellm_params: { <<: *local, model: openai/Qwen3.6-35B-A3B-UD-IQ4_NL-Gnrl }
+  - model_name: ThinkingCap-Qwen3.8-27B-Q4_K_M-Code
+    model_info: { max_input_tokens: 180000, max_output_tokens: 32768, supports_vision: true }
+    litellm_params: { <<: *local, model: openai/ThinkingCap-Qwen3.8-27B-Q4_K_M-Code }
+  - model_name: Qwopus3.6-35B-A3B-Coder-Q4_K_M
+    model_info: { max_input_tokens: 65536, max_output_tokens: 16384, supports_vision: false }
+    litellm_params: { <<: *local, model: openai/Qwopus3.6-35B-A3B-Coder-Q4_K_M }
+
+  # ---- Cloud models (OpenRouter) ----
+  - model_name: cloud/qwen3.8-flash
+    litellm_params: &cloud
+      model: openrouter/qwen/qwen3.8-flash
+      api_key: os.environ/OPENROUTER_API_KEY
+      timeout: 600
+  - model_name: cloud/mimo-v2.6-flash
+    litellm_params: { <<: *cloud, model: openrouter/xiaomi/mimo-v2.6-flash }
+  - model_name: cloud/gemini-3.8-flash
+    litellm_params: { <<: *cloud, model: openrouter/google/gemini-3.8-flash }
+
+  # ---- auto: local first, cloud on error ----
+  - model_name: auto
+    model_info: { max_input_tokens: 180000, max_output_tokens: 32768, supports_vision: true }
+    litellm_params: { <<: *local, model: openai/Qwen3.8-27B-UD-Q4_K_XL-Code }
+
+router_settings:
+  fallbacks:
+    - auto: [cloud/qwen3.8-flash]
+  num_retries: 0             # a down Unraid does not get better by retrying
+  allowed_fails: 1
+  cooldown_time: 30          # after a failure, skip the local server for 30 s
+
+litellm_settings:
+  drop_params: true          # parameters a provider does not know are dropped, not errors
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

@@ -1,0 +1,15 @@
+[Unit]
+Description=LiteLLM proxy (single LLM entry point)
+After=network-online.target llama-swap.service
+Wants=network-online.target
+
+[Service]
+User=litellm
+Group=litellm
+EnvironmentFile=/etc/litellm/litellm.env
+ExecStart=/opt/litellm/venv/bin/litellm --config /etc/litellm/config.yaml --host 0.0.0.0 --port 4000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

@@ -15,13 +15,24 @@ videos and local audio/video files. Three parts:
 - `hermes-skill/yt-transcribe/` — Hermes Agent skill (`SKILL.md`) plus a stdlib-only
   client (`scripts/yt_transcribe.py`) that runs on the user's Windows PC.
 
-`deploy/` holds the systemd unit and env example for the API, and the llama-swap entry for
-the worker.
+The repo also documents and ships the whole home AI setup the service lives in:
+
+- `docs/` (Hungarian, user-facing): `architektura.md` (+ `architektura.svg`/`.png`, the diagram the
+  owner likes — keep its layout; a Mermaid version was tried and lays out differently),
+  `telepites.md` (step-by-step install with checks), `frissites.md` (per-component updates and rollback).
+- `deploy/llama-swap/`: `config.yaml`, `unraid-container.sh` (starts/stops Unraid containers via the
+  Unraid GraphQL API; `cmd` must stay alive while the container runs), `unraid.env.example`, systemd unit.
+- `deploy/litellm/`: `config.yaml` (local preset names, `cloud/...` OpenRouter names, `auto` with
+  fallback), env example, systemd unit (LiteLLM pinned to 1.104.2).
+- `deploy/yt-transcribe/`: the API's systemd unit and env example. `deploy/clients/opencode.json`.
+
+When a change affects installation or operation, update `docs/telepites.md`, `docs/frissites.md`
+and the matching `deploy/` file in the same change. Keep the diagram in sync (edit the SVG, re-render the PNG).
 
 ## How the GPU is shared
 
 llama-swap (on the same Proxmox LXC) owns the GPU queue. It starts/stops Unraid containers
-through the Unraid GraphQL API (`unraid-container.sh`, not in this repo), one at a time:
+through the Unraid GraphQL API (`deploy/llama-swap/unraid-container.sh`), one at a time:
 the llama.cpp router container, the GPU worker, later Strata. A local job is ONE streamed
 HTTP request `POST WORKER_URL/transcribe` (WORKER_URL = `http://127.0.0.1:8080/upstream/yt-transcribe-gpu`).
 While it is open, llama-swap keeps the GPU for the worker and queues LLM requests; the next
@@ -62,11 +73,15 @@ Consequences — keep them:
 - Speaker labels are anonymous: `Szereplő N` (Hungarian) / `Speaker N`, numbered by first appearance.
 - Architecture: control plane on Proxmox (LiteLLM, llama-swap, this API), GPU containers on
   Unraid, started on demand by llama-swap via the Unraid API (no Docker socket).
+- llama.cpp runs as ONE router-mode container with the owner's `models.ini` (6 presets); llama-swap
+  has one entry for it with every preset name as an alias (the request's model name passes through).
+- LiteLLM stays because of error-based fallback (`auto` → cloud when Unraid is off); llama-swap's
+  selectors choose before sending and never retry (checked in v262 source). Without `auto` it could go.
 
 ## Deployment context
 
 - Proxmox LXC `ai-router`: llama-swap (:8080), LiteLLM (:4000), this API (:8765, systemd + venv,
-  `deploy/yt-transcribe-api.service`). 2.5 Gbit LAN to Unraid.
+  `deploy/yt-transcribe/yt-transcribe-api.service`). 2.5 Gbit LAN to Unraid.
 - Unraid (192.168.1.20; Ryzen 9 5950X, 64 GB RAM, one RTX 3090 24 GB): llama.cpp router container
   (:8001, `models.ini` presets), GPU worker container `yt-transcribe-gpu` (:8766), autostart off.
 - The Hermes client blocks in one call (≤ 570 s); Hermes caps a foreground terminal call at 600 s.
@@ -77,9 +92,10 @@ Consequences — keep them:
 ## Verified vs. not verified
 
 - Verified on the real server (before the split): the WhisperX GPU path (one 14-min video ≈ 23 s).
-- Verified locally: llama-swap queueing/streaming with the real binary and fake containers.
-- Not yet run on the real servers: the split API/worker, the worker container build, the whole
-  cloud mode (real AssemblyAI not yet called), uploads, budget. Treat behaviour of the real
+- Verified on the real servers (2026-10-09, owner): llama-swap + Unraid API script, LiteLLM incl.
+  cloud fallback, Hermes through LiteLLM, the split API/worker in local mode.
+- Not yet verified for real: the whole cloud transcription mode (real AssemblyAI not yet called),
+  uploads, budget; Strata (not connected yet); OpenCode/VS Code through LiteLLM. Treat behaviour of the real
   AssemblyAI API (Hungarian accuracy, diarization for Hungarian) as unknown until tested.
 
 ## Tests

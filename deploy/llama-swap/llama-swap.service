@@ -1,0 +1,14 @@
+[Unit]
+Description=llama-swap (GPU queue for the Unraid server)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=llamaswap
+Group=llamaswap
+ExecStart=/opt/llama-swap/llama-swap --config /etc/llama-swap/config.yaml --listen 0.0.0.0:8080 --watch-config
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

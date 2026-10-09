@@ -1,0 +1,79 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1860" viewBox="0 0 800 930" font-family="Liberation Sans, Arial, DejaVu Sans, sans-serif">
+<defs>
+<marker id="at" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#1D9E75" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="ac" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#D85A30" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<marker id="ag" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M2 1L8 5L2 9" fill="none" stroke="#5F5E5A" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></marker>
+<style>
+.th{font-size:14px;font-weight:bold;fill:#2C2C2A}.ts{font-size:12px;fill:#5F5E5A}
+.box{fill:#F1EFE8;stroke:#888780;stroke-width:0.8}
+.t rect{fill:#E1F5EE;stroke:#0F6E56;stroke-width:0.8}.t .th{fill:#085041}.t .ts{fill:#0F6E56}
+.c rect{fill:#FAECE7;stroke:#993C1D;stroke-width:0.8}.c .th{fill:#712B13}.c .ts{fill:#993C1D}
+.c rect.chip{fill:#FFFFFF;stroke:#D85A30;stroke-width:0.7}.cx{font-size:11px;fill:#712B13}
+.lt{stroke:#1D9E75;stroke-width:1.6;fill:none}.lc{stroke:#D85A30;stroke-width:1.6;fill:none;stroke-dasharray:5 4}
+.lk{stroke:#5F5E5A;stroke-width:1.4;fill:none;stroke-dasharray:1.5 3;stroke-linecap:round}.ln{stroke:#5F5E5A;stroke-width:1.4;fill:none}
+.ctr{fill:none;stroke:#888780;stroke-width:1;stroke-dasharray:4 4}
+.dt{font-size:11px;font-style:italic;fill:#0F6E56}.dc{font-size:11px;font-style:italic;fill:#993C1D}.dk{font-size:11px;font-style:italic;fill:#444441}
+.pt{font-weight:normal;font-size:12px}.lan{font-size:11px;font-weight:bold;fill:#5F5E5A;letter-spacing:0.5px}
+</style></defs>
+<rect width="800" height="930" fill="#FFFFFF"/>
+
+<!-- zones -->
+<rect class="ctr" x="20" y="12" width="760" height="104" rx="18"/><text class="th" x="36" y="30" dominant-baseline="central">Felhő / internet</text>
+<rect class="ctr" x="20" y="232" width="760" height="268" rx="18"/><text class="th" x="36" y="250" dominant-baseline="central">Proxmox · mindig fut (LXC)</text>
+<rect class="ctr" x="20" y="540" width="760" height="330" rx="18"/><text class="th" x="36" y="558" dominant-baseline="central">Unraid · igény szerint fut</text>
+<text class="lan" x="400" y="520" text-anchor="middle" dominant-baseline="central">2,5 Gbit/s LAN</text>
+
+<!-- cloud -->
+<g class="t"><rect x="45" y="48" width="220" height="56" rx="8"/><text class="th" x="155" y="66" text-anchor="middle" dominant-baseline="central">Felhős LLM</text><text class="ts" x="155" y="84" text-anchor="middle" dominant-baseline="central">pl. OpenRouter</text></g>
+<rect class="box" x="460" y="48" width="150" height="56" rx="8"/><text class="th" x="535" y="66" text-anchor="middle" dominant-baseline="central">YouTube</text><text class="ts" x="535" y="84" text-anchor="middle" dominant-baseline="central">és más videóoldalak</text>
+<g class="c"><rect x="630" y="48" width="130" height="56" rx="8"/><text class="th" x="695" y="66" text-anchor="middle" dominant-baseline="central">AssemblyAI</text><text class="ts" x="695" y="84" text-anchor="middle" dominant-baseline="central">felhős átírás</text></g>
+
+<!-- clients -->
+<rect class="box" x="280" y="140" width="180" height="56" rx="8"/><text class="th" x="370" y="158" text-anchor="middle" dominant-baseline="central">Kliensek</text><text class="ts" x="370" y="176" text-anchor="middle" dominant-baseline="central">Hermes, OpenCode, VS Code</text>
+
+<!-- proxmox -->
+<g class="t"><rect x="45" y="270" width="285" height="56" rx="8"/><text class="th" x="187" y="288" text-anchor="middle" dominant-baseline="central">LiteLLM<tspan class="pt"> :4000</tspan></text><text class="ts" x="187" y="306" text-anchor="middle" dominant-baseline="central">modellnevek, tartalékváltás</text></g>
+<g class="c"><rect x="380" y="270" width="380" height="108" rx="8"/><text class="th" x="570" y="288" text-anchor="middle" dominant-baseline="central">yt-transcribe API<tspan class="pt"> :8765</tspan></text><text class="ts" x="570" y="306" text-anchor="middle" dominant-baseline="central">feladatsor, feltöltött fájlok, kimeneti fájlok</text>
+<rect class="chip" x="400" y="326" width="170" height="32" rx="6"/><text class="cx" x="485" y="342" text-anchor="middle" dominant-baseline="central">yt-dlp · letöltés</text>
+<rect class="chip" x="585" y="326" width="160" height="32" rx="6"/><text class="cx" x="665" y="342" text-anchor="middle" dominant-baseline="central">ffmpeg · 16 kHz mono FLAC</text></g>
+<rect class="box" x="45" y="420" width="715" height="56" rx="8"/><text class="th" x="402" y="438" text-anchor="middle" dominant-baseline="central">llama-swap<tspan class="pt"> :8080</tspan></text><text class="ts" x="402" y="456" text-anchor="middle" dominant-baseline="central">betölt, ürít, sorba állít · a konténereket az Unraid API-n át indítja és állítja le</text>
+
+<!-- unraid -->
+<rect class="box" x="600" y="575" width="160" height="50" rx="8"/><text class="th" x="680" y="592" text-anchor="middle" dominant-baseline="central">Unraid API</text><text class="ts" x="680" y="610" text-anchor="middle" dominant-baseline="central">konténer indít / leállít</text>
+<g class="t"><rect x="45" y="650" width="190" height="90" rx="8"/><text class="th" x="140" y="672" text-anchor="middle" dominant-baseline="central">llama-server<tspan class="pt"> :8001</tspan></text><text class="ts" x="140" y="692" text-anchor="middle" dominant-baseline="central">router mód, models.ini</text><text class="ts" x="140" y="710" text-anchor="middle" dominant-baseline="central">6 preset, egy betöltve</text></g>
+<g class="t"><rect x="255" y="650" width="150" height="90" rx="8"/><text class="th" x="330" y="672" text-anchor="middle" dominant-baseline="central">Strata</text><text class="ts" x="330" y="692" text-anchor="middle" dominant-baseline="central">Qwen3.8-Flash-Next</text><text class="ts" x="330" y="710" text-anchor="middle" dominant-baseline="central">még nincs bekötve</text></g>
+<g class="c"><rect x="425" y="650" width="335" height="90" rx="8"/><text class="th" x="592" y="668" text-anchor="middle" dominant-baseline="central">yt-transcribe GPU-worker<tspan class="pt"> :8766</tspan></text><text class="ts" x="592" y="686" text-anchor="middle" dominant-baseline="central">Whisper + igazítás + beszélőfelismerés</text>
+<rect class="chip" x="445" y="702" width="120" height="26" rx="6"/><text class="cx" x="505" y="715" text-anchor="middle" dominant-baseline="central">faster-whisper</text>
+<rect class="chip" x="577" y="702" width="100" height="26" rx="6"/><text class="cx" x="627" y="715" text-anchor="middle" dominant-baseline="central">pyannote</text>
+<rect class="chip" x="689" y="702" width="56" height="26" rx="6"/><text class="cx" x="717" y="715" text-anchor="middle" dominant-baseline="central">ffmpeg</text></g>
+<rect class="box" x="45" y="790" width="410" height="56" rx="8"/><text class="th" x="250" y="808" text-anchor="middle" dominant-baseline="central">RTX 3090 · 24 GB</text><text class="ts" x="250" y="826" text-anchor="middle" dominant-baseline="central">egyszerre egy konténer használja</text>
+<rect class="box" x="560" y="790" width="200" height="56" rx="8"/><text class="th" x="660" y="808" text-anchor="middle" dominant-baseline="central">NVMe cache</text><text class="ts" x="660" y="826" text-anchor="middle" dominant-baseline="central">GGUF- és Whisper-modellek</text>
+
+<!-- arrows: LLM branch -->
+<line x1="300" y1="196" x2="300" y2="262" class="lt" marker-end="url(#at)"/><text class="dt" x="308" y="214" dominant-baseline="central">prompt ↔ tokenek</text>
+<line x1="240" y1="270" x2="240" y2="112" class="lt" marker-end="url(#at)"/><text class="dt" x="232" y="176" text-anchor="end" dominant-baseline="central">prompt ↔ tokenek</text><text class="dt" x="232" y="190" text-anchor="end" dominant-baseline="central">(cloud/…, auto tartalék)</text>
+<line x1="190" y1="326" x2="190" y2="412" class="lt" marker-end="url(#at)"/><text class="dt" x="198" y="366" dominant-baseline="central">prompt ↔ tokenek</text><text class="dt" x="198" y="380" dominant-baseline="central">(helyi nevek, auto)</text>
+<line x1="215" y1="476" x2="215" y2="642" class="lt" marker-end="url(#at)"/><text class="dt" x="223" y="600" dominant-baseline="central">prompt ↔ tokenek</text>
+<line x1="330" y1="476" x2="330" y2="642" class="lt" marker-end="url(#at)"/>
+<line x1="140" y1="740" x2="140" y2="782" class="lt" marker-end="url(#at)"/>
+<line x1="330" y1="740" x2="330" y2="782" class="lt" marker-end="url(#at)"/>
+
+<!-- arrows: transcription branch -->
+<line x1="420" y1="196" x2="420" y2="262" class="lc" marker-end="url(#ac)"/><text class="dc" x="428" y="214" dominant-baseline="central">URL / fájl ↔ átirat</text>
+<line x1="535" y1="104" x2="535" y2="262" class="lc" marker-end="url(#ac)"/><text class="dc" x="543" y="176" dominant-baseline="central">videó hangja</text>
+<line x1="695" y1="270" x2="695" y2="112" class="lc" marker-end="url(#ac)"/><text class="dc" x="703" y="176" dominant-baseline="central">FLAC hang,</text><text class="dc" x="703" y="190" dominant-baseline="central">vissza átirat</text>
+<line x1="560" y1="378" x2="560" y2="412" class="lc" marker-end="url(#ac)"/><text class="dc" x="568" y="398" dominant-baseline="central">FLAC hang (helyi mód)</text>
+<line x1="470" y1="476" x2="470" y2="642" class="lc" marker-end="url(#ac)"/><text class="dc" x="478" y="600" dominant-baseline="central">FLAC ↔ átirat JSON</text>
+<line x1="440" y1="740" x2="440" y2="782" class="lc" marker-end="url(#ac)"/>
+
+<!-- control and model files -->
+<line x1="680" y1="476" x2="680" y2="567" class="lk" marker-end="url(#ag)"/><text class="dk" x="672" y="520" text-anchor="end" dominant-baseline="central">start / stop (GraphQL)</text>
+<line x1="560" y1="818" x2="463" y2="818" class="ln" marker-end="url(#ag)"/><text class="dk" x="510" y="806" text-anchor="middle" dominant-baseline="central">modellfájlok</text>
+
+<!-- legend -->
+<line x1="40" y1="900" x2="72" y2="900" class="lt"/><text class="ts" x="80" y="900" dominant-baseline="central">LLM-ág</text>
+<line x1="160" y1="900" x2="192" y2="900" class="lc"/><text class="ts" x="200" y="900" dominant-baseline="central">átírás</text>
+<line x1="270" y1="900" x2="302" y2="900" class="lk"/><text class="ts" x="310" y="900" dominant-baseline="central">vezérlés</text>
+<rect class="box" x="400" y="893" width="14" height="14" rx="3"/><text class="ts" x="422" y="900" dominant-baseline="central">közös vagy külső elem</text>
+<text class="dk" x="760" y="900" text-anchor="end" dominant-baseline="central">dőlt felirat: a nyílon haladó adat</text>
+</svg>

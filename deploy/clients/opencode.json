@@ -1,0 +1,205 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "otthon": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "Otthoni AI (LiteLLM)",
+      "options": {
+        "baseURL": "http://AI-ROUTER-IP:4000/v1",
+        "apiKey": "{env:LITELLM_API_KEY}"
+      },
+      "models": {
+        "auto": {
+          "name": "auto",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 180000,
+            "output": 32768
+          }
+        },
+        "Qwen3.8-27B-UD-Q4_K_XL-Code": {
+          "name": "Qwen3.8-27B-UD-Q4_K_XL-Code",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 180000,
+            "output": 32768
+          }
+        },
+        "Qwen3.8-27B-UD-Q4_K_XL-Gnrl": {
+          "name": "Qwen3.8-27B-UD-Q4_K_XL-Gnrl",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 180000,
+            "output": 40960
+          }
+        },
+        "Qwen3.6-35B-A3B-UD-IQ4_NL-Code": {
+          "name": "Qwen3.6-35B-A3B-UD-IQ4_NL-Code",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 242144,
+            "output": 32768
+          }
+        },
+        "Qwen3.6-35B-A3B-UD-IQ4_NL-Gnrl": {
+          "name": "Qwen3.6-35B-A3B-UD-IQ4_NL-Gnrl",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 242144,
+            "output": 40960
+          }
+        },
+        "ThinkingCap-Qwen3.8-27B-Q4_K_M-Code": {
+          "name": "ThinkingCap-Qwen3.8-27B-Q4_K_M-Code",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 180000,
+            "output": 32768
+          }
+        },
+        "Qwopus3.6-35B-A3B-Coder-Q4_K_M": {
+          "name": "Qwopus3.6-35B-A3B-Coder-Q4_K_M",
+          "tool_call": true,
+          "reasoning": false,
+          "attachment": false,
+          "modalities": {
+            "input": [
+              "text"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 65536,
+            "output": 16384
+          }
+        },
+        "cloud/qwen3.8-flash": {
+          "name": "cloud/qwen3.8-flash",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 1000000,
+            "output": 131072
+          }
+        },
+        "cloud/mimo-v2.6-flash": {
+          "name": "cloud/mimo-v2.6-flash",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 1048576,
+            "output": 131072
+          }
+        },
+        "cloud/gemini-3.8-flash": {
+          "name": "cloud/gemini-3.8-flash",
+          "tool_call": true,
+          "reasoning": true,
+          "attachment": true,
+          "modalities": {
+            "input": [
+              "text",
+              "image"
+            ],
+            "output": [
+              "text"
+            ]
+          },
+          "limit": {
+            "context": 1048576,
+            "output": 65536
+          }
+        }
+      }
+    }
+  },
+  "model": "otthon/Qwen3.8-27B-UD-Q4_K_XL-Code"
+}

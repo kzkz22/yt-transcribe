@@ -12,6 +12,8 @@ Három része van:
 
 A forrás lehet videó-URL (YouTube és amit a yt-dlp még ismer) vagy helyi hang- és videófájl. Az átiratot nem az LLM készíti, így az összefoglaláshoz bármelyik modelled jó.
 
+[![Architektúra](docs/architektura.svg)](docs/architektura.md)
+
 ## Hogyan osztozik a GPU-n az LLM-mel
 
 A GPU-t a Proxmoxon futó llama-swap osztja ki, mindig egy programnak. Egy helyi átírás egyetlen HTTP-kérés az API-tól a llama-swapon át a workerhez:
@@ -22,84 +24,24 @@ A GPU-t a Proxmoxon futó llama-swap osztja ki, mindig egy programnak. Egy helyi
 
 A szolgáltatás tehát maga nem ürít és nem tölt vissza modellt.
 
-## 1. Hugging Face token (a beszélőfelismeréshez)
+## Telepítés és frissítés
 
-A pyannote modell ingyenes, de regisztrációhoz kötött:
+A teljes rendszer (Unraid, Proxmox LXC a llama-swappal és a LiteLLM-mel, kliensek) leírása a `docs/` mappában van:
 
-1. Lépj be a huggingface.co-ra, és fogadd el a feltételeket itt: `pyannote/speaker-diarization-community-1`.
-2. Készíts egy *read* tokent: huggingface.co/settings/tokens.
+- [Architektúra](docs/architektura.md): az ábra, a komponensek, a kérések útja, és hogy mi miért van.
+- [Telepítés lépésről lépésre](docs/telepites.md): minden komponens, ellenőrzéssel.
+- [Frissítés és karbantartás](docs/frissites.md): komponensenként, visszalépéssel együtt.
 
-Token nélkül a worker csak beszélőcímkék nélküli átiratot ad (`--no-diarize`).
+A telepítéshez szükséges fájlok a `deploy/` mappában vannak:
 
-## 2. GPU-worker az Unraidon
+| Mappa | Tartalom |
+| --- | --- |
+| `deploy/llama-swap/` | `config.yaml`, az Unraid API-s indítóscript, a kulcsfájl mintája, systemd-szolgáltatás |
+| `deploy/litellm/` | `config.yaml` (modellnevek, tartalékváltás), a kulcsfájl mintája, systemd-szolgáltatás |
+| `deploy/yt-transcribe/` | az API systemd-szolgáltatása és beállításainak mintája |
+| `deploy/clients/` | OpenCode-beállítás |
 
-Ha még fut a régi, egyben lévő `yt-transcribe` konténer, töröld: `docker rm -f yt-transcribe`. A letöltött modellek a `models` mappában maradnak, a worker újra felhasználja őket.
-
-Másold a `gpu-worker/` mappát a szerverre, például ide: `/mnt/my_new_cache/appdata/yt-transcribe/gpu-worker`, majd:
-
-```bash
-cd /mnt/my_new_cache/appdata/yt-transcribe
-docker build -t yt-transcribe-gpu ./gpu-worker
-
-docker create --name yt-transcribe-gpu --gpus all \
-  -p 8766:8766 \
-  -v /mnt/my_new_cache/appdata/yt-transcribe/models:/models \
-  -v /mnt/my_new_cache/appdata/yt-transcribe/worker-data:/data \
-  -e HF_TOKEN=hf_IDE_A_TOKENED \
-  yt-transcribe-gpu
-```
-
-A `docker create` csak létrehozza a konténert, nem indítja el, és automatikus újraindítást sem kap: indítani a llama-swap fogja. A Docker fülön az automatikus indítás maradjon kikapcsolva.
-
-A worker beállításai (környezeti változók):
-
-| Változó | Alapérték | Mire való |
-| --- | --- | --- |
-| `HF_TOKEN` | – | Hugging Face token a beszélőfelismeréshez |
-| `DEVICE` | `auto` | `auto`: GPU, ha látható, különben CPU. `cpu`: mindig CPU |
-| `WHISPER_MODELS` | `large-v3,large-v3-turbo` | A worker által elfogadott modellek |
-| `COMPUTE_TYPE` | automatikus | CPU-n `int8`, GPU-n `float16` |
-| `BATCH_SIZE` | automatikus | CPU-n 4, GPU-n 8 |
-| `CPU_THREADS` | fizikai magok | CPU-s futásnál a szálak száma |
-| `DIARIZE_MODEL` | WhisperX alapérték | Másik pyannote modell neve |
-| `ASR_CACHE_DAYS` | `14` | Ennyi napig őrzi a kész átírást (a beszélőfelismerés előtti állapotot) |
-| `MAX_AUDIO_MB` | `2048` | A fogadott hangfájl legnagyobb mérete |
-
-## 3. llama-swap bejegyzés (Proxmox)
-
-1. A `deploy/llama-swap-entry.yaml` tartalmát másold a `/etc/llama-swap/config.yaml` `models:` része alá.
-2. A `/etc/llama-swap/unraid.env` fájlban add hozzá a workert a GPU-s konténerekhez: `GPU_CONTAINERS="llama.cpp yt-transcribe-gpu"`.
-
-A llama-swap a konfigurációt magától újraolvassa (`--watch-config`).
-
-## 4. API a Proxmox LXC-ben
-
-Ugyanabba az LXC-be kerül, mint a llama-swap és a LiteLLM:
-
-```bash
-apt install -y python3-venv ffmpeg unzip curl
-# deno: a yt-dlp ezzel oldja meg a YouTube JavaScript-ellenőrzését
-curl -fsSL -o /tmp/deno.zip https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip
-unzip -o /tmp/deno.zip -d /usr/local/bin && deno --version
-
-useradd --system --home /var/lib/yt-transcribe --shell /usr/sbin/nologin yttranscribe
-mkdir -p /opt/yt-transcribe /etc/yt-transcribe /var/lib/yt-transcribe
-# másold ide a repó api/ mappáját: /opt/yt-transcribe/api
-python3 -m venv /opt/yt-transcribe/venv
-/opt/yt-transcribe/venv/bin/pip install -r /opt/yt-transcribe/api/requirements.txt
-chown -R yttranscribe: /opt/yt-transcribe/venv /var/lib/yt-transcribe
-
-cp deploy/api.env.example /etc/yt-transcribe/api.env      # töltsd ki
-chown yttranscribe: /etc/yt-transcribe/api.env && chmod 600 /etc/yt-transcribe/api.env
-cp deploy/yt-transcribe-api.service /etc/systemd/system/
-systemctl daemon-reload && systemctl enable --now yt-transcribe-api
-```
-
-Indításkor a szolgáltatás frissíti a yt-dlp-t. Ha egy YouTube-videó letöltése hibát ad, először indítsd újra: `systemctl restart yt-transcribe-api`.
-
-Ellenőrzés: `curl http://AI-ROUTER-IP:8765/health`. Ez nem szól a workernek, mert az a llama-swapon keresztül elvenné a GPU-t az LLM-től.
-
-### Felhős mód (AssemblyAI)
+## Felhős mód (AssemblyAI)
 
 Felhős módban az API letölti a hangot, kis méretű FLAC-fájllá alakítja, feltölti az AssemblyAI-hoz, és onnan kapja vissza az átiratot a beszélőcímkékkel. A GPU-hoz nem nyúl, így kikapcsolt Unraid mellett is működik.
 
@@ -113,7 +55,7 @@ Bekapcsolásához regisztrálj az assemblyai.com-on, és írd be a kulcsot az `a
 - **Törlés:** az eredmény letöltése után törli az átiratot és a feltöltött hangot az AssemblyAI-nál (`CLOUD_DELETE_AFTER=0` kikapcsolja).
 - **EU-s adatkezelés:** `ASSEMBLYAI_BASE_URL=https://api.eu.assemblyai.com`.
 
-### Az API beállításai (`/etc/yt-transcribe/api.env`)
+## Az API beállításai (`/etc/yt-transcribe/api.env`)
 
 | Változó | Alapérték | Mire való |
 | --- | --- | --- |
@@ -134,23 +76,7 @@ Bekapcsolásához regisztrálj az assemblyai.com-on, és írd be a kulcsot az `a
 | `MAX_DURATION_MIN` | `360` | Ennél hosszabb videót nem fogad el |
 | `YTDLP_COOKIES` | – | cookies.txt útvonala, ha a YouTube bejelentkezést kér |
 
-## 5. Hermes skill telepítése
-
-Másold a `hermes-skill/yt-transcribe` mappát a Hermes `skills/media` mappájába. Ez a `config.yaml` mellett van:
-
-- Linux/macOS: `~/.hermes/skills/media/yt-transcribe`
-- Windows: `%LOCALAPPDATA%\hermes\skills\media\yt-transcribe`
-
-Utána állítsd be az API címét. A kulcsban a `skills` után `config` is kell:
-
-```bash
-hermes config set skills.config.yt_transcribe.url http://AI-ROUTER-IP:8765
-hermes config set skills.config.yt_transcribe.out_dir ~/yt-transcripts
-```
-
-Ellenőrzés: a `hermes config show` kimenetében a „Skill Settings" résznél kell megjelenniük.
-
-## 6. Használat
+## Használat
 
 Hermesben:
 
